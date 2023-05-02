@@ -66,16 +66,15 @@ class MetaLearner(nn.Module):
         """Compute the negative log-likelyhood of sampling `x` from the model.
 
         We want to find the likelyhood of sampling `x` starting from the `starting_embedding`.
-        Sampling is autoregressive for complex structures, so the probability of x is the product of the probabilites of
-        sampling each x_i conditioned on having sampled x_1,...,x_(i-1). To compute the probability of sampling
-        x_i at each step, we need the intermediate embeddings embed(x1,...,x_(i-1))
+        Sampling is autoregressive for complex structures, so the probability of x is the product of the probabilities of
+        sampling each x_i conditioned on having sampled x_1,...,x_(i-1). Therefore we need the intermediate embeddings
+        embed(x1,...,x_(i-1)) to compute the probability of sampling each x_i."""
 
-        Hence the computation is done in two steps:"""
-
+        # Hence the computation is done in two steps:
         # 1/ compute the embeddings of the substructures of x. They are returned in the `context` variable:
         embedding, context = self.codec.encode(x=x)
 
-        # 2/ predict the next column starting from the `starting_embedding` and as-if `x` was autoregressively sampled
+        # 2/ predict the next column starting from the `starting_embedding` and as-if `x` was autoregressively sampled:
         prediction = self.codec.decode(
             conditioning_vector=self.starting_embedding, context=context
         )
