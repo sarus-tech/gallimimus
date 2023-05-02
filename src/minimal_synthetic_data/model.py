@@ -27,7 +27,8 @@ class Codec(nn.Module, abc.ABC):
     @abc.abstractmethod
     def decode(self, conditioning_vector: Embedding, context: Context) -> Prediction:
         """Turn a `conditioning_vector` into a predicted probability distribution,
-        using the embeddings in the `context` in places where autoregressive sampling would occur."""
+        using the embeddings in the `context` in places where autoregressive sampling would occur.
+        """
         ...
 
     @abc.abstractmethod
@@ -51,7 +52,8 @@ class MetaLearner(nn.Module):
     """The `codec` is embedded in a `Metalearner` which holds an additionnal `starting_embedding` parameter.
     The `starting_embedding` is the conditioning vector from which the autoregressive sampling starts.
 
-    This module works with single observations (not batches). The concrete model used in practice is the following BatchMetaLearner."""
+    This module works with single observations (not batches). The concrete model used in practice is the following BatchMetaLearner.
+    """
 
     codec: Codec
 

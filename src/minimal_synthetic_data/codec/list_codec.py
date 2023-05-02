@@ -4,9 +4,15 @@ import jax
 import jax.numpy as jnp
 from flax import linen as nn
 
-from model import Embedding, Observation, Context, Prediction, Codec
-from codec.categorical_codec import CategoricalCodec
-from transformer import Transformer
+from minimal_synthetic_data.model import (
+    Embedding,
+    Observation,
+    Context,
+    Prediction,
+    Codec,
+)
+from minimal_synthetic_data.codec.categorical_codec import CategoricalCodec
+from minimal_synthetic_data.transformer import Transformer
 
 import typing as t
 
@@ -47,7 +53,8 @@ class ListCodec(Codec):
     is repeated `buffer_size` times, except that the loss of `(len_x, items_x)` only looks at the `len_x` first columns.
 
     For efficiency reasons, a vectorized version of the `subcodec` is used (otherwise jit compilation unrolls the loops).
-    Due to this, an observation is a Pytree where the items are stacked on the first dimension of their leaves."""
+    Due to this, an observation is a Pytree where the items are stacked on the first dimension of their leaves.
+    """
 
     subcodec: Codec
 
@@ -91,8 +98,12 @@ class ListCodec(Codec):
         conditioning_vectors = self.decoder(inputs=conditioning_vectors)
 
         # decode the length and items independently
-        conditioning_len, conditioning_items = conditioning_vectors[0], conditioning_vectors[1:]
-        pred_len = self.len_codec.decode(conditioning_vector=conditioning_len, context=None)
+        conditioning_len = conditioning_vectors[0]
+        pred_len = self.len_codec.decode(
+            conditioning_vector=conditioning_len, context=None
+        )
+
+        conditioning_items = conditioning_vectors[1:]
         pred_items = self.vmapped_item_codec.decode(conditioning_items, subcontexts)
 
         return (pred_len, pred_items)
@@ -108,7 +119,7 @@ class ListCodec(Codec):
             encoded_embeddings = self.encoder(embeddings)
             conditioned_encoded_embeddings = jnp.vstack(
                 [conditioning_vector, encoded_embeddings[:-1]]
-            ) # length N + 1
+            )  # length N + 1
 
             conditioning_vectors = self.decoder(inputs=conditioned_encoded_embeddings)
             # add a dimension because the sampling function is vectorized

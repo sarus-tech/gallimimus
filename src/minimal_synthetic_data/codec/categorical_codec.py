@@ -4,7 +4,7 @@ import flax.linen as nn
 
 import typing as t
 
-from model import Embedding, Codec
+from minimal_synthetic_data.model import Embedding, Codec
 
 Observation = jax.Array  # of shape ()
 Context = None

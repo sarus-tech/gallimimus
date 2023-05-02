@@ -7,7 +7,7 @@ import optax
 
 import typing as t
 
-from model import BatchMetaLearner
+from minimal_synthetic_data.model import BatchMetaLearner
 
 
 def tree_transpose(list_of_trees):
@@ -31,18 +31,20 @@ def train(
     model: BatchMetaLearner,
     params,
     hyperparams: TrainingHyperparameters,
-    dataset: t.List, # List of observations
+    dataset: t.List,  # List of observations
     optimizer_seed: int = 0,
 ):
     # select the optimizer and loss function:
     if hyperparams.dp:
-        tx = optax.dpsgd(
-            learning_rate=hyperparams.learning_rate,
-            noise_multiplier=hyperparams.noise_multiplier,
-            l2_norm_clip=hyperparams.l2_norm_clip,
-            seed=optimizer_seed,
+        tx = optax.chain(
+            optax.differentially_private_aggregate(
+                l2_norm_clip=hyperparams.l2_norm_clip,
+                noise_multiplier=hyperparams.noise_multiplier,
+                seed=optimizer_seed,
+            ),
+            optax.sgd(learning_rate=hyperparams.learning_rate),
         )
-        # dpsgd needs per-instance gradients:
+        # `differentially_private_aggregate` takes the per-instance gradients
         apply_fn = model.loss_and_per_example_grad
     else:
         tx = optax.sgd(

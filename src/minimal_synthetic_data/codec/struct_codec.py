@@ -1,8 +1,14 @@
 import jax
 import jax.numpy as jnp
 
-from model import Embedding, Observation, Context, Prediction, Codec
-from transformer import Transformer
+from minimal_synthetic_data.model import (
+    Embedding,
+    Observation,
+    Context,
+    Prediction,
+    Codec,
+)
+from minimal_synthetic_data.transformer import Transformer
 
 import typing as t
 
@@ -28,7 +34,6 @@ class StructCodec(Codec):
     def encode(
         self, x: Observation, conditioning_context=None
     ) -> t.Tuple[Embedding, Context]:
-
         # apply sub-codec encoders to each column independently
         embeddings, subcontexts = zip(
             *[

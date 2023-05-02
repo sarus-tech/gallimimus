@@ -1,12 +1,12 @@
 import jax
-import jax.numpy as jnp
+import numpy as np
 
-from codec.categorical_codec import CategoricalCodec
-from codec.list_codec import ListCodec
-from codec.struct_codec import StructCodec
-from model import BatchMetaLearner
+from minimal_synthetic_data.codec.categorical_codec import CategoricalCodec
+from minimal_synthetic_data.codec.list_codec import ListCodec
+from minimal_synthetic_data.codec.struct_codec import StructCodec
+from minimal_synthetic_data.model import BatchMetaLearner
 
-from training import TrainingHyperparameters, train
+from minimal_synthetic_data.training import TrainingHyperparameters, train
 
 from jax import config
 
@@ -16,43 +16,55 @@ embed_dim = 8
 
 ### Create the model
 cat_codec = CategoricalCodec(
-    name="cat0",
     embed_dim=embed_dim,
     vocab_size=20,
 )
 
+max_len = 50
+buffer_size = 20
+cat_len_codec = CategoricalCodec(
+    embed_dim=embed_dim,
+    vocab_size=max_len,
+)
 
 l_codec = ListCodec(
     embed_dim=embed_dim,
     subcodec=cat_codec,
-    max_len=10,
-    buffer_size=5,
+    max_len=max_len,
+    buffer_size=buffer_size,
     n_heads=4,
     n_blocks=1,
 )
 
 struct_codec = StructCodec(
-    embed_dim=embed_dim, n_heads=4, n_blocks=1, subcodecs=[cat_codec, cat_codec]
-)
-
-
-l_codec2 = ListCodec(
     embed_dim=embed_dim,
-    subcodec=l_codec,
-    max_len=8,
-    buffer_size=4,
     n_heads=4,
     n_blocks=1,
+    subcodecs=[cat_codec, cat_len_codec, l_codec],
 )
 
 model = BatchMetaLearner(
-    codec=l_codec2,
+    codec=struct_codec,
 )
 
 ### Train the model
 rng = jax.random.PRNGKey(0)
+N = 5000
 
-ds = [model.example for i in range(500)]
+rng1, rng2, rng = jax.random.split(rng, 3)
+maxs = jax.random.randint(key=rng1, shape=(N,), minval=0, maxval=20)
+lens = jax.random.poisson(key=rng2, lam=20, shape=(N,)).clip(0, max_len)
+
+rngs = jax.random.split(rng, N)
+b = []
+ds = [(
+    maxs[i], lens[i], (
+        lens[i],
+        jax.random.randint(rngs[i],[buffer_size,],0,maxs[i]),
+        ),
+    ) for i in range(N)
+]
+
 
 params = model.init(rng=rng)
 
@@ -60,9 +72,9 @@ hyperparams = TrainingHyperparameters(
     num_epochs=10,
     batch_size=100,
     learning_rate=1e-1,
-    dp=True,
+    dp=False,
     noise_multiplier=0.3,
-    l2_norm_clip=1.,
+    l2_norm_clip=1.0,
 )
 
 trained_params = train(model=model, params=params, hyperparams=hyperparams, dataset=ds)
