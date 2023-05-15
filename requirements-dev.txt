@@ -1,3 +1,4 @@
-.
+-e .
 black
 numpy
+sphinx
