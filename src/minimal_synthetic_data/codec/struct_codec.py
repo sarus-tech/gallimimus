@@ -21,24 +21,22 @@ Prediction = t.List[Prediction]  # of length N
 
 
 class StructCodec(Codec):
-    subcodecs: t.List[Codec]
+    subcodecs_in: t.List[Codec]
 
     n_heads: int = 4
     n_blocks: int = 1
 
     def setup(self):
-        self.subcodecs_clone = [subcodec.clone() for subcodec in self.subcodecs]
+        self.subcodecs = [subcodec.clone() for subcodec in self.subcodecs_in]
         self.encoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks)
         self.decoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks)
 
-    def encode(
-        self, x: Observation, conditioning_context=None
-    ) -> t.Tuple[Embedding, Context]:
+    def encode(self, x: Observation) -> t.Tuple[Embedding, Context]:
         # apply sub-codec encoders to each column independently
         embeddings, subcontexts = zip(
             *[
                 subcodec_i.encode(x_i)
-                for x_i, subcodec_i in zip(x, self.subcodecs_clone)
+                for x_i, subcodec_i in zip(x, self.subcodecs)
             ]
         )
 
@@ -63,7 +61,7 @@ class StructCodec(Codec):
             for conditioning_context_i, subcontext_i, subcodec_i in zip(
                 conditioning_contexts,
                 subcontexts,
-                self.subcodecs_clone,
+                self.subcodecs,
             )
         ]
 
@@ -72,10 +70,10 @@ class StructCodec(Codec):
     def sample(self, conditioning_vector: Embedding) -> t.Tuple[Observation, Embedding]:
         samples = []
         embeddings = jnp.zeros(
-            shape=(len(self.subcodecs_clone), self.embed_dim)
+            shape=(len(self.subcodecs), self.embed_dim)
         )  # length N
 
-        for i, subcodec_i in enumerate(self.subcodecs_clone):
+        for i, subcodec_i in enumerate(self.subcodecs):
             # encode what was previously sampled
             encoded_embeddings = self.encoder(embeddings)
 
@@ -101,11 +99,11 @@ class StructCodec(Codec):
     def loss(self, x: Observation, prediction: Prediction) -> float:
         losses = [
             subcodec.loss(x=x_i, prediction=pred_i)
-            for subcodec, x_i, pred_i in zip(self.subcodecs_clone, x, prediction)
+            for subcodec, x_i, pred_i in zip(self.subcodecs, x, prediction)
         ]
         return jnp.array(losses).sum()
 
     def example(self) -> Observation:
-        # iterate over self.subcodecs instead of self.subcodecs_clone because they only exist after `setup` is done
-        sub_examples = [subcodec.example() for subcodec in self.subcodecs]
+        # iterate over self.subcodecs_in instead of self.subcodecs because they only exist after `setup` is done
+        sub_examples = [subcodec.example() for subcodec in self.subcodecs_in]
         return tuple(sub_examples)

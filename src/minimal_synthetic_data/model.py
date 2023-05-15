@@ -19,8 +19,9 @@ class Codec(nn.Module, abc.ABC):
 
     @abc.abstractmethod
     def encode(self, x: Observation) -> t.Tuple[Embedding, Context]:
-        """Turn an observation `x` into
-        - an embedding vector of fixed size `(self.embed_dim,)`
+        """Turn an observation `x` into:
+
+        - an embedding vector of fixed size ``(self.embed_dim,)``
         - a context containing the embeddings for the substructures of x"""
         ...
 
@@ -55,14 +56,16 @@ class MetaLearner(nn.Module):
     This module works with single observations (not batches). The concrete model used in practice is the following BatchMetaLearner.
     """
 
-    codec: Codec
+    codec_in: Codec
 
     def setup(self):
+        self.codec = self.codec_in.clone()
+
         self.starting_embedding = self.param(
             "starting_embedding", nn.zeros, (self.codec.embed_dim,)
         )
 
-    def full_pass(self, x: Observation):
+    def __call__(self, x: Observation):
         """Compute the negative log-likelyhood of sampling `x` from the model.
 
         We want to find the likelyhood of sampling `x` starting from the `starting_embedding`.
@@ -88,24 +91,24 @@ class MetaLearner(nn.Module):
         return sample
 
     def example(self):
-        return self.codec.example()
+        return self.codec_in.example()
 
 
 class BatchMetaLearner:
     """The necessary methods to initialize, train, and sample from the model."""
 
-    def __init__(self, codec: Codec):
+    def __init__(self, codec_in: Codec):
         # `metalearner` is a stateful flax module, we convert all the methods we need to pure jax functions:
-        metalearner = MetaLearner(codec=codec, parent=None)
+        metalearner = MetaLearner(codec_in=codec_in, parent=None)
 
         self.init_fun = lambda rng, x: metalearner.init(
-            rngs={"params": rng}, x=x, method="full_pass"
+            rngs={"params": rng},
+            x=x,
         )
 
         self.apply_fun = lambda params, x: metalearner.apply(
             variables={"params": params},
             x=x,
-            method="full_pass",
         )
 
         self.sample_fun = lambda params, rng: metalearner.apply(

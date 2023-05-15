@@ -56,7 +56,7 @@ class ListCodec(Codec):
     Due to this, an observation is a Pytree where the items are stacked on the first dimension of their leaves.
     """
 
-    subcodec: Codec
+    subcodec_in: Codec
 
     n_heads: int
     n_blocks: int
@@ -70,7 +70,7 @@ class ListCodec(Codec):
             vocab_size=self.max_len + 1,
         )
 
-        self.vmapped_item_codec = vmap_clone_codec(self.subcodec)
+        self.vmapped_item_codec = vmap_clone_codec(self.subcodec_in)
 
         self.encoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks)
         self.decoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks)
@@ -167,7 +167,9 @@ class ListCodec(Codec):
         example_len = jnp.array(self.max_len - 1)
 
         # stack by hand instead of using the vmapped subcodec because it only exists after `setup` is done
-        example_items_list = [self.subcodec.example() for _ in range(self.buffer_size)]
+        example_items_list = [
+            self.subcodec_in.example() for _ in range(self.buffer_size)
+        ]
         example_items = jax.tree_map(lambda *s: jnp.stack(s), *example_items_list)
 
         return (example_len, example_items)
