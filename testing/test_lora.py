@@ -1,37 +1,45 @@
 """pretrained distilgpt2 trained with LoRA
 
 taken from the notebook https://colab.research.google.com/github/huggingface/notebooks/blob/main/examples/causal_language_modeling_flax.ipynb
-listed at https://huggingface.co/docs/transformers/main/en/model_doc/gpt2#resources
-
-"""
-
+listed at https://huggingface.co/docs/transformers/main/en/model_doc/gpt2#resources"""
+import jax
+import optax
+import jax.numpy as jnp
+from flax.training import train_state
+from tqdm import tqdm
 import jax.random
 from transformers import FlaxAutoModel, AutoTokenizer
+from datasets import load_dataset
+
 from lora_flax import LoRA
 
+### import the pre-trained model
 tokenizer = AutoTokenizer.from_pretrained("distilgpt2")
 model = FlaxAutoModel.from_pretrained("distilgpt2")
 
-params = model.params
 
+### create the LoRA model
 apply_fn = lambda params, input, **kwargs: model(
     **input, params=params["params"], **kwargs
 )
 
-
-#######
+filter_fn = lambda param_name, params: param_name == (
+    "h",
+    "0",
+    "attn",
+    "c_attn",
+    "kernel",
+)
 
 lora_bert = LoRA(
     target_apply_fn=apply_fn,
-    pretrained_params=params,
-    filter_fn=lambda params_name, params: len(params.shape) == 2,
+    pretrained_params=model.params,
+    filter_fn=filter_fn,
     r=4,
 )
 
 
-#####
-from datasets import load_dataset
-
+### download and tokenize the dataset
 language = "is"
 max_seq_length = 512
 
@@ -74,21 +82,7 @@ def group_texts(examples):
 
 tokenized_datasets = tokenized_datasets1.map(group_texts, batched=True, num_proc=4)
 
-##################
-
-import jax
-import optax
-import flax
-import jax.numpy as jnp
-import math
-
-from flax.training import train_state
-from flax.training.common_utils import get_metrics, onehot, shard
-
-import numpy as np
-
-from tqdm import tqdm
-
+### train the LoRA model with the dataset
 batch_size = 16
 num_epochs = 10
 training_seed = 0
@@ -126,16 +120,15 @@ def data_loader(rng, dataset, batch_size, shuffle=False):
         yield batch
 
 
-token_rng = jax.random.PRNGKey(0)
-train_loader = data_loader(
-    token_rng, tokenized_datasets["train"], batch_size, shuffle=True
+init_rng = jax.random.PRNGKey(0)
+
+init_loader = data_loader(
+    init_rng, tokenized_datasets["train"], batch_size, shuffle=True
 )
 
-for init_batch in train_loader:
-    labels = init_batch.pop("labels")
-
-    lora_param = lora_bert.init(jax.random.PRNGKey(0), init_batch)
-    break
+init_batch = next(init_loader)
+labels = init_batch.pop("labels")
+lora_param = lora_bert.init(jax.random.PRNGKey(0), init_batch)
 
 state = train_state.TrainState.create(
     apply_fn=lora_bert.apply, params=lora_param, tx=adamw
@@ -153,7 +146,7 @@ def train_step(state, batch, dropout_rng):
         )[0]
 
         loss = optax.softmax_cross_entropy(
-            logits[..., :-1, :], onehot(labels[..., 1:], logits.shape[-1])
+            logits[..., :-1, :], jax.nn.one_hot(labels[..., 1:], logits.shape[-1])
         ).mean()
         return loss
 
@@ -172,7 +165,7 @@ def eval_step(params, batch):
     logits = lora_bert.apply(variables=params, input=batch, train=False)[0]
 
     loss = optax.softmax_cross_entropy(
-        logits[..., :-1, :], onehot(labels[..., 1:], logits.shape[-1])
+        logits[..., :-1, :], jax.nn.one_hot(labels[..., 1:], logits.shape[-1])
     ).mean()
 
     # summarize metrics
@@ -203,8 +196,6 @@ for epoch in tqdm(range(1, num_epochs + 1), desc=f"Epoch ...", position=0, leave
 
             progress_bar_train.update(1)
 
-            break  # TODO remove
-
         progress_bar_train.write(
             f"Train... ({epoch}/{num_epochs} | Loss: {round(train_metric['loss'].mean(), 3)}, Learning Rate: {round(train_metric['learning_rate'].mean(), 6)})"
         )
@@ -225,15 +216,9 @@ for epoch in tqdm(range(1, num_epochs + 1), desc=f"Epoch ...", position=0, leave
 
             progress_bar_eval.update(1)
 
-            break  # TODO remove
-
-        eval_metrics = get_metrics(eval_metrics)
-        eval_metrics = jax.tree_map(jnp.mean, eval_metrics)
+        eval_metrics = jax.tree_map(
+            lambda *leaves: jnp.mean(jnp.array(leaves)), *eval_metrics
+        )
         progress_bar_eval.write(
             f"Eval... ({epoch}/{num_epochs} | Loss: {eval_metrics['loss']} | Perplexity: {eval_metrics['perplexity']})"
         )
-
-    break  # TODO remove
-
-# mettre moins de poids
-# plus petit reseau, le metalearner
