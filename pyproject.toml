@@ -1,3 +1,11 @@
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "lora_flax"
+version = "1.0.0"
+dependencies = [
+    "jax",
+    "flax",
+]
