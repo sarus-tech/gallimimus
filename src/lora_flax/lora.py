@@ -1,3 +1,5 @@
+from collections.abc import Mapping
+
 import jax.numpy as jnp
 import jax
 import flax
@@ -7,7 +9,7 @@ import typing as t
 from flax.core.scope import VariableDict
 from jax.random import KeyArray
 
-FilterFunction = t.Callable[[str, jax.Array], bool]
+FilterFunction = t.Callable[[t.List[str], jax.Array], bool]
 
 
 def init_lora_params(
@@ -16,12 +18,11 @@ def init_lora_params(
     filter_fn: FilterFunction,
     r: int,
 ) -> VariableDict:
-    """
-    Initialize the PyTree containing the low-rank perturbations.
+    """Initialize the PyTree containing the low-rank perturbations.
 
     :param rng: a jax PRNGKey
     :param params: the PyTree of the pretrained parameters
-    :param filter_fn: A function of signature ``(param_name: str, param: jax.Array) -> bool`` deciding if a parameter is finetuned.
+    :param filter_fn: A function of signature ``(param_name: t.List[str], param: jax.Array) -> bool`` deciding if a parameter is finetuned.
     :param r: The rank of the LoRA approximation.
     :return: A PyTree which is a subset of ``pretrained_params`` and contains the initialized low-rank perturbations
     """
@@ -92,7 +93,7 @@ class LoRA(nn.Module):
     """The pretrained parameters of the model."""
 
     filter_fn: FilterFunction
-    """A function of signature ``(param_name: str, param: jax.Array) -> bool`` deciding if a parameter is finetuned."""
+    """A function of signature ``(param_name: t.List[str], param: jax.Array) -> bool`` deciding if a parameter is finetuned."""
     r: int
     """The rank of the LoRA approximation."""
 
