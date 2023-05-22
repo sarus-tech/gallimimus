@@ -50,13 +50,21 @@ def init_lora_params(
     return lora_params
 
 
+def lora_combine_vars(
+    pretrained_var: jax.Array,
+    lora_vars: t.Tuple[jax.Array, jax.Array],
+    alpha: float = 1.0,
+):
+    A, B = lora_vars
+    return pretrained_var + alpha * A @ B
+
+
 def lora_combine_params(
     pretrained_params: VariableDict,
     lora_params: VariableDict,
     alpha: float = 1.0,
 ) -> VariableDict:
-    """
-    Adds the LoRA fine-tuning to the pretrained parameters.
+    """Adds the LoRA fine-tuning to the pretrained parameters.
 
     :param pretrained_params: A PyTree containing the original parameters
     :param lora_params: A PyTree which is a subset of ``pretrained_params`` and contains the trained low-rank perturbations to add
@@ -68,13 +76,9 @@ def lora_combine_params(
     )
     pretrained_params_flat = flax.traverse_util.flatten_dict(pretrained_params)
 
-    def _lora_combine_params(pretrained_param, lora_param):
-        (left, right) = lora_param
-        return pretrained_param + alpha * left @ right
-
     total_flat = {
         k: (
-            _lora_combine_params(pretrained_param, lora_params_flat[k])
+            lora_combine_vars(pretrained_param, lora_params_flat[k], alpha)
             if k in lora_params_flat
             else pretrained_param
         )
@@ -82,6 +86,30 @@ def lora_combine_params(
     }
 
     return flax.traverse_util.unflatten_dict(total_flat)
+
+
+def lora_combine_params2(
+    pretrained_params: VariableDict,
+    lora_params: VariableDict,
+    alpha: float = 1.0,
+):
+    """Adds the LoRA fine-tuning to the pretrained parameters.
+
+    :param pretrained_params: A PyTree containing the original parameters
+    :param lora_params: A PyTree which is a subset of ``pretrained_params`` and contains the trained low-rank perturbations to add
+    :param alpha: scaling of the perturbation in the sum
+    :return: A PyTree containing the updated parameters (same shape as ``pretrained_params``)
+    """
+    res = {}
+    for k, v in pretrained_params.items():
+        if k not in lora_params:
+            res[k] = v
+        else:
+            if isinstance(v, Mapping):
+                res[k] = lora_combine_params(v, lora_params[k], alpha)
+            else:
+                res[k] = lora_combine_vars(v, lora_params[k], alpha)
+    return res
 
 
 class LoRA(nn.Module):
