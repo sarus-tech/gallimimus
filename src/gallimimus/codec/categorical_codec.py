@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 import jax
+
 import jax.numpy as jnp
 import flax.linen as nn
 
-import typing as t
+from typing import Tuple
 
-from gallimimus.model import Embedding, Codec
-
+from gallimimus.codec.abstract_codec import Codec, Embedding
 
 CategoricalObservation = jax.Array  # of shape () and dtype int
 CategoricalContext = None
@@ -13,10 +15,12 @@ CategoricalPrediction = jax.Array  # un-normalized logits of shape (vocab_size,)
 
 
 class CategoricalCodec(Codec):
-    """Handles an integer in [0, ``vocab_size``-1]."""
+    """Handles an integer in [0, ``vocab_size``-1].
+
+    :param embed_dim: size of the embeddings.
+    :param vocab_size: Number of possible values"""
 
     vocab_size: int
-    """Number of possible values."""
 
     def setup(self):
         self.embedder = nn.Embed(
@@ -26,9 +30,7 @@ class CategoricalCodec(Codec):
         )
         self.bias = self.param("bias_decoding", nn.ones, (self.vocab_size,))
 
-    def encode(
-        self, x: CategoricalObservation
-    ) -> t.Tuple[Embedding, CategoricalContext]:
+    def encode(self, x: CategoricalObservation) -> Tuple[Embedding, CategoricalContext]:
         assert x.shape == ()
         embedding = self.embedder(inputs=x)
         return embedding, None
@@ -41,7 +43,7 @@ class CategoricalCodec(Codec):
 
     def sample(
         self, conditioning_vector: Embedding
-    ) -> t.Tuple[CategoricalObservation, Embedding]:
+    ) -> Tuple[CategoricalObservation, Embedding]:
         assert conditioning_vector.shape == (self.embed_dim,)
         prediction = self.decode(conditioning_vector=conditioning_vector, context=None)
         rng = self.make_rng(name="sample")

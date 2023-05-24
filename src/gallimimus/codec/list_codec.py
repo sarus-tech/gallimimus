@@ -1,29 +1,30 @@
+from __future__ import annotations
+
 import dataclasses
 
 import jax
 import jax.numpy as jnp
 from flax import linen as nn
 
-from gallimimus.model import (
-    Embedding,
+from gallimimus.codec.abstract_codec import (
     Codec,
+    Embedding,
     Observation,
     Context,
     Prediction,
 )
 
-
 from gallimimus.codec.categorical_codec import CategoricalCodec
 from gallimimus.transformer import Transformer
 
-import typing as t
+from typing import Tuple
 
 # For a ListCodec of buffer_size N:
-ListObservation = t.Tuple[int, Observation]
+ListObservation = Tuple[int, Observation]
 # real length, and stacked Pytrees of sub-observations
-ListContext = t.Tuple[jax.Array, Context]
+ListContext = Tuple[jax.Array, Context]
 # encoded_embeddings, stacked Pytrees of sub-contexts
-ListPrediction = t.Tuple[jax.Array, Prediction]
+ListPrediction = Tuple[jax.Array, Prediction]
 # length logits, stacked Pytrees of sub-predictions
 
 
@@ -52,20 +53,23 @@ class ListCodec(Codec):
     is repeated ``buffer_size`` times, except that the loss of ``(len_x, items_x)`` only looks at the ``len_x`` first columns.
 
     For efficiency reasons, a vectorized version of the ``subcodec`` is used (otherwise jit compilation unrolls the loops).
-    Due to this, an observation is a Pytree where the items are stacked on the first dimension of their leaves."""
+    Due to this, an observation is a Pytree where the items are stacked on the first dimension of their leaves.
+
+    :param embed_dim: Size of the embeddings.
+    :param subcodec_in: Codec used to generate the items in the list.
+    :param n_heads: Number of transformer heads.
+    :param n_blocks: Number of transformer blocks.
+    :param max_len: Maximum size of the generated list.
+    :param buffer_size: Size of the buffer used for training. Must be smaller than ``max_len``.
+    """
 
     subcodec_in: Codec
-    """Codec used to generate the items in the list."""
 
     n_heads: int
-    """Number of transformer heads."""
     n_blocks: int
-    """Number of transformer blocks."""
-
     max_len: int
-    """Maximum size of the generated list."""
     buffer_size: int
-    """Size of the buffer used for training. Must be smaller than ``max_len``."""
+
     def setup(self):
         self.len_codec = CategoricalCodec(
             embed_dim=self.embed_dim,
@@ -77,7 +81,7 @@ class ListCodec(Codec):
         self.encoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks)
         self.decoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks)
 
-    def encode(self, x: ListObservation) -> t.Tuple[Embedding, ListContext]:
+    def encode(self, x: ListObservation) -> Tuple[Embedding, ListContext]:
         x_len, x_items = x
 
         # encode the length and items independently
@@ -114,7 +118,7 @@ class ListCodec(Codec):
 
     def sample(
         self, conditioning_vector: Embedding
-    ) -> t.Tuple[ListObservation, Embedding]:
+    ) -> Tuple[ListObservation, Embedding]:
         # sample the length
         sampled_len, embedding_len = self.len_codec.sample(conditioning_vector)
 

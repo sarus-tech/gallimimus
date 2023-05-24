@@ -10,6 +10,8 @@ Welcome to gallimimus's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   model
+   codec
 
 
 Indices and tables

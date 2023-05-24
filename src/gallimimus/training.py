@@ -1,3 +1,4 @@
+from __future__ import annotations
 import random
 import dataclasses
 
@@ -5,13 +6,14 @@ import jax
 import jax.numpy as jnp
 import optax
 
-import typing as t
+from typing import List, Any
 from flax.core.scope import VariableDict
 
-from gallimimus.model import BatchMetaLearner, Observation
+from gallimimus.model import MetaLearner
+from gallimimus.codec.abstract_codec import Observation
 
 
-def tree_transpose(list_of_trees: t.List[t.Any]):
+def tree_transpose(list_of_trees: List[Any]):
     """Convert a list of trees of identical structure into a single tree of lists."""
     trees_stacked = jax.tree_map(lambda *xs: jnp.array(list(xs)), *list_of_trees)
     return trees_stacked
@@ -19,20 +21,28 @@ def tree_transpose(list_of_trees: t.List[t.Any]):
 
 @dataclasses.dataclass
 class TrainingHyperparameters:
+    """Parameters for the training."""
+
     num_epochs: int = 10
-    learning_rate: float = 1
+    """Number of training epochs."""
     batch_size: int = 128
+    """Batch size."""
+    learning_rate: float = 1.0
+    """Learning rate of the optimizer."""
 
     dp: bool = False
+    """Trains with SGD if ``False``, DP-SGD if ``True``."""
     noise_multiplier: float = 0.0
+    """Noise multiplier for the DP-SGD."""
     l2_norm_clip: float = 1e10
+    """Gradient clipping norm for the DP=SGD."""
 
 
 def train(
-    model: BatchMetaLearner,
+    model: MetaLearner,
     params: VariableDict,
     hyperparams: TrainingHyperparameters,
-    dataset: t.List[Observation],  # List of observations
+    dataset: List[Observation],  # List of observations
     optimizer_seed: int = 0,
 ) -> VariableDict:
     """Train the model.
@@ -42,7 +52,7 @@ def train(
     :param hyperparams: Configuration for the training.
     :param dataset: A list of observations to train on.
     :param optimizer_seed: Starting seed for the noise in DP-SGD training.
-    :return: The parameters after training.
+    :return: The parameters after training the model according to the hyperparameters.
     """
     # select the optimizer and loss function:
     if hyperparams.dp:
