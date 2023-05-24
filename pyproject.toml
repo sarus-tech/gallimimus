@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "minimal_synthetic_data"
+name = "gallimimus"
 version = "1.0.0"
 dependencies = [
     "jax",

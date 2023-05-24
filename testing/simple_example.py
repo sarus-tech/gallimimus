@@ -1,16 +1,12 @@
 import jax
 import numpy as np
 
-from minimal_synthetic_data.codec.categorical_codec import CategoricalCodec
-from minimal_synthetic_data.codec.list_codec import ListCodec
-from minimal_synthetic_data.codec.struct_codec import StructCodec
-from minimal_synthetic_data.model import BatchMetaLearner
+from gallimimus.codec import CategoricalCodec, ListCodec, StructCodec
+from gallimimus.model import BatchMetaLearner
 
-from minimal_synthetic_data.training import TrainingHyperparameters, train
-
+from gallimimus.training import TrainingHyperparameters, train
+import flax.linen as nn
 from jax import config
-
-config.update("jax_debug_nans", True)
 
 embed_dim = 8
 
@@ -29,7 +25,7 @@ cat_len_codec = CategoricalCodec(
 
 l_codec = ListCodec(
     embed_dim=embed_dim,
-    subcodec=cat_codec,
+    subcodec_in = cat_codec,
     max_len=max_len,
     buffer_size=buffer_size,
     n_heads=4,
@@ -40,12 +36,22 @@ struct_codec = StructCodec(
     embed_dim=embed_dim,
     n_heads=4,
     n_blocks=1,
-    subcodecs=[cat_codec, cat_len_codec, l_codec],
+    subcodecs_in=[cat_codec, cat_len_codec, l_codec],
 )
 
+
+# struct_codec = StructCodec(
+#     embed_dim=embed_dim,
+#     n_heads=4,
+#     n_blocks=1,
+#     subcodecs_in=[cat_codec, l_codec],
+# )
+
 model = BatchMetaLearner(
-    codec=struct_codec,
+    codec_in=struct_codec,
 )
+
+
 
 ### Train the model
 rng = jax.random.PRNGKey(0)
@@ -57,16 +63,29 @@ lens = jax.random.poisson(key=rng2, lam=20, shape=(N,)).clip(0, max_len)
 
 rngs = jax.random.split(rng, N)
 b = []
-ds = [(
-    maxs[i], lens[i], (
+ds = [
+    (
+        maxs[i],
         lens[i],
-        jax.random.randint(rngs[i],[buffer_size,],0,maxs[i]),
+        (
+            lens[i],
+            jax.random.randint(
+                rngs[i],
+                [
+                    buffer_size,
+                ],
+                0,
+                maxs[i],
+            ),
         ),
-    ) for i in range(N)
+    )
+    for i in range(N)
 ]
 
 
 params = model.init(rng=rng)
+
+
 
 hyperparams = TrainingHyperparameters(
     num_epochs=10,

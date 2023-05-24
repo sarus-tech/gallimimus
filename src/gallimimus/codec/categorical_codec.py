@@ -4,17 +4,19 @@ import flax.linen as nn
 
 import typing as t
 
-from minimal_synthetic_data.model import Embedding, Codec
+from gallimimus.model import Embedding, Codec
 
-Observation = jax.Array  # of shape ()
-Context = None
-Prediction = jax.Array  # un-normalized logits of shape (vocab_size,)
+
+CategoricalObservation = jax.Array  # of shape () and dtype int
+CategoricalContext = None
+CategoricalPrediction = jax.Array  # un-normalized logits of shape (vocab_size,)
 
 
 class CategoricalCodec(Codec):
-    """Handles an integer in [0, vocab_size-1]."""
+    """Handles an integer in [0, ``vocab_size``-1]."""
 
     vocab_size: int
+    """Number of possible values."""
 
     def setup(self):
         self.embedder = nn.Embed(
@@ -24,15 +26,22 @@ class CategoricalCodec(Codec):
         )
         self.bias = self.param("bias_decoding", nn.ones, (self.vocab_size,))
 
-    def encode(self, x: Observation) -> t.Tuple[Embedding, Context]:
+    def encode(
+        self, x: CategoricalObservation
+    ) -> t.Tuple[Embedding, CategoricalContext]:
+        assert x.shape == ()
         embedding = self.embedder(inputs=x)
         return embedding, None
 
-    def decode(self, conditioning_vector: Embedding, context: Context) -> Prediction:
+    def decode(
+        self, conditioning_vector: Embedding, context: CategoricalContext
+    ) -> CategoricalPrediction:
         prediction = self.embedder.attend(query=conditioning_vector) + self.bias
         return prediction
 
-    def sample(self, conditioning_vector: Embedding) -> t.Tuple[Observation, Embedding]:
+    def sample(
+        self, conditioning_vector: Embedding
+    ) -> t.Tuple[CategoricalObservation, Embedding]:
         assert conditioning_vector.shape == (self.embed_dim,)
         prediction = self.decode(conditioning_vector=conditioning_vector, context=None)
         rng = self.make_rng(name="sample")
@@ -44,7 +53,9 @@ class CategoricalCodec(Codec):
         embedding, _ = self.encode(x=sample)
         return sample, embedding
 
-    def loss(self, x: Observation, prediction: Prediction) -> float:
+    def loss(
+        self, x: CategoricalObservation, prediction: CategoricalPrediction
+    ) -> jnp.ndarray:
         logits_normalized = jax.nn.log_softmax(x=prediction)
         loss_x = -(
             logits_normalized * jax.nn.one_hot(x=x, num_classes=self.vocab_size)

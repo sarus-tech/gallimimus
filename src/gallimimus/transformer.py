@@ -3,7 +3,6 @@
 from https://github.com/google/flax/blob/main/examples/nlp_seq/models.py"""
 
 import jax.numpy as jnp
-
 import flax.linen as nn
 
 

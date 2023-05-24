@@ -1,43 +1,44 @@
 import jax
 import jax.numpy as jnp
 
-from minimal_synthetic_data.model import (
+from gallimimus.model import (
     Embedding,
+    Codec,
     Observation,
     Context,
     Prediction,
-    Codec,
 )
-from minimal_synthetic_data.transformer import Transformer
-
+from gallimimus.transformer import Transformer
 import typing as t
 
 
 # for a Struct with N columns
-Observation = t.List[Observation]  # of length N
-Context = t.Tuple[jax.Array, t.List[Context]]
+StructObservation = t.List[Observation]  # of length N
+StructContext = t.Tuple[jax.Array, t.List[Context]]
 # encoded embeddings of shape (N, embed_dim), list of subcontexts of length N
-Prediction = t.List[Prediction]  # of length N
+StructPrediction = t.List[Prediction]  # of length N
 
 
 class StructCodec(Codec):
+    """A codec for tabular data where the columns are generated each using their own sub-codec, as provided
+    by ``subcodecs_in``."""
     subcodecs_in: t.List[Codec]
+    """List of the Codecs used for each column."""
 
     n_heads: int = 4
+    """Number of transformer heads."""
     n_blocks: int = 1
+    """Number of transformer blocks."""
 
     def setup(self):
         self.subcodecs = [subcodec.clone() for subcodec in self.subcodecs_in]
         self.encoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks)
         self.decoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks)
 
-    def encode(self, x: Observation) -> t.Tuple[Embedding, Context]:
+    def encode(self, x: StructObservation) -> t.Tuple[Embedding, StructContext]:
         # apply sub-codec encoders to each column independently
         embeddings, subcontexts = zip(
-            *[
-                subcodec_i.encode(x_i)
-                for x_i, subcodec_i in zip(x, self.subcodecs)
-            ]
+            *[subcodec_i.encode(x_i) for x_i, subcodec_i in zip(x, self.subcodecs)]
         )
 
         # apply encoder transformer to the embeddings
@@ -46,7 +47,9 @@ class StructCodec(Codec):
 
         return encoded_embeddings[-1], (encoded_embeddings, subcontexts)
 
-    def decode(self, conditioning_vector: Embedding, context: Context) -> Prediction:
+    def decode(
+        self, conditioning_vector: Embedding, context: StructContext
+    ) -> StructPrediction:
         encoded_embeddings, subcontexts = context
 
         # apply decoder transformer to the *conditioned* embeddings
@@ -67,11 +70,11 @@ class StructCodec(Codec):
 
         return sub_predictions
 
-    def sample(self, conditioning_vector: Embedding) -> t.Tuple[Observation, Embedding]:
+    def sample(
+        self, conditioning_vector: Embedding
+    ) -> t.Tuple[StructObservation, Embedding]:
         samples = []
-        embeddings = jnp.zeros(
-            shape=(len(self.subcodecs), self.embed_dim)
-        )  # length N
+        embeddings = jnp.zeros(shape=(len(self.subcodecs), self.embed_dim))  # length N
 
         for i, subcodec_i in enumerate(self.subcodecs):
             # encode what was previously sampled
@@ -96,14 +99,14 @@ class StructCodec(Codec):
         encoded_embeddings = self.encoder(embeddings)
         return samples, encoded_embeddings[-1]
 
-    def loss(self, x: Observation, prediction: Prediction) -> float:
+    def loss(self, x: StructObservation, prediction: StructPrediction) -> jnp.ndarray:
         losses = [
             subcodec.loss(x=x_i, prediction=pred_i)
             for subcodec, x_i, pred_i in zip(self.subcodecs, x, prediction)
         ]
         return jnp.array(losses).sum()
 
-    def example(self) -> Observation:
+    def example(self) -> StructObservation:
         # iterate over self.subcodecs_in instead of self.subcodecs because they only exist after `setup` is done
         sub_examples = [subcodec.example() for subcodec in self.subcodecs_in]
-        return tuple(sub_examples)
+        return list(sub_examples)

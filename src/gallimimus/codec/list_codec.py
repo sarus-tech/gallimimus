@@ -4,27 +4,26 @@ import jax
 import jax.numpy as jnp
 from flax import linen as nn
 
-from minimal_synthetic_data.model import (
+from gallimimus.model import (
     Embedding,
+    Codec,
     Observation,
     Context,
     Prediction,
-    Codec,
 )
-from minimal_synthetic_data.codec.categorical_codec import CategoricalCodec
-from minimal_synthetic_data.transformer import Transformer
+
+
+from gallimimus.codec.categorical_codec import CategoricalCodec
+from gallimimus.transformer import Transformer
 
 import typing as t
 
-
 # For a ListCodec of buffer_size N:
-Observation = t.Tuple[int, t.Any]
+ListObservation = t.Tuple[int, Observation]
 # real length, and stacked Pytrees of sub-observations
-
-Context = t.Tuple[jax.Array, t.Any]
+ListContext = t.Tuple[jax.Array, Context]
 # encoded_embeddings, stacked Pytrees of sub-contexts
-
-Prediction = t.Tuple[jnp.ndarray, t.Any]
+ListPrediction = t.Tuple[jax.Array, Prediction]
 # length logits, stacked Pytrees of sub-predictions
 
 
@@ -49,21 +48,24 @@ def vmap_clone_codec(codec_instance: Codec) -> Codec:
 
 
 class ListCodec(Codec):
-    """Formally the ListCodec behaves like a StructCodec[Categorical(max_len+1), subcodec, ..., subcodec] where `subcodec`
-    is repeated `buffer_size` times, except that the loss of `(len_x, items_x)` only looks at the `len_x` first columns.
+    """Formally the ListCodec behaves like a ``StructCodec[Categorical(max_len+1), subcodec, ..., subcodec]`` where ``subcodec``
+    is repeated ``buffer_size`` times, except that the loss of ``(len_x, items_x)`` only looks at the ``len_x`` first columns.
 
-    For efficiency reasons, a vectorized version of the `subcodec` is used (otherwise jit compilation unrolls the loops).
-    Due to this, an observation is a Pytree where the items are stacked on the first dimension of their leaves.
-    """
+    For efficiency reasons, a vectorized version of the ``subcodec`` is used (otherwise jit compilation unrolls the loops).
+    Due to this, an observation is a Pytree where the items are stacked on the first dimension of their leaves."""
 
     subcodec_in: Codec
+    """Codec used to generate the items in the list."""
 
     n_heads: int
+    """Number of transformer heads."""
     n_blocks: int
+    """Number of transformer blocks."""
 
     max_len: int
+    """Maximum size of the generated list."""
     buffer_size: int
-
+    """Size of the buffer used for training. Must be smaller than ``max_len``."""
     def setup(self):
         self.len_codec = CategoricalCodec(
             embed_dim=self.embed_dim,
@@ -75,7 +77,7 @@ class ListCodec(Codec):
         self.encoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks)
         self.decoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks)
 
-    def encode(self, x: Observation) -> t.Tuple[Embedding, Context]:
+    def encode(self, x: ListObservation) -> t.Tuple[Embedding, ListContext]:
         x_len, x_items = x
 
         # encode the length and items independently
@@ -88,7 +90,9 @@ class ListCodec(Codec):
 
         return encoded_embeddings[-1], (encoded_embeddings, subcontexts)
 
-    def decode(self, conditioning_vector: Embedding, context: Context) -> Prediction:
+    def decode(
+        self, conditioning_vector: Embedding, context: ListContext
+    ) -> ListPrediction:
         encoded_embeddings, subcontexts = context
 
         # transform the *conditioned* embeddings with the decoder
@@ -108,7 +112,9 @@ class ListCodec(Codec):
 
         return (pred_len, pred_items)
 
-    def sample(self, conditioning_vector: Embedding) -> t.Tuple[Observation, Embedding]:
+    def sample(
+        self, conditioning_vector: Embedding
+    ) -> t.Tuple[ListObservation, Embedding]:
         # sample the length
         sampled_len, embedding_len = self.len_codec.sample(conditioning_vector)
 
@@ -150,7 +156,7 @@ class ListCodec(Codec):
         encoded_embeddings = self.encoder(embeddings)
         return (sampled_len, samples), encoded_embeddings[-1]
 
-    def loss(self, x: Observation, prediction: Prediction) -> float:
+    def loss(self, x: ListObservation, prediction: ListPrediction) -> jnp.ndarray:
         x_len, x_items = x
         pred_len, pred_items = prediction
 
