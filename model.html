@@ -44,7 +44,26 @@
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Model</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Model</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#gallimimus.MetaLearner"><code class="docutils literal notranslate"><span class="pre">MetaLearner</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#gallimimus.MetaLearner.init"><code class="docutils literal notranslate"><span class="pre">MetaLearner.init()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gallimimus.MetaLearner.loss_and_per_example_grad"><code class="docutils literal notranslate"><span class="pre">MetaLearner.loss_and_per_example_grad()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gallimimus.MetaLearner.loss_and_grad"><code class="docutils literal notranslate"><span class="pre">MetaLearner.loss_and_grad()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gallimimus.MetaLearner.sample"><code class="docutils literal notranslate"><span class="pre">MetaLearner.sample()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#gallimimus.TrainingHyperparameters"><code class="docutils literal notranslate"><span class="pre">TrainingHyperparameters</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#gallimimus.TrainingHyperparameters.num_epochs"><code class="docutils literal notranslate"><span class="pre">TrainingHyperparameters.num_epochs</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gallimimus.TrainingHyperparameters.batch_size"><code class="docutils literal notranslate"><span class="pre">TrainingHyperparameters.batch_size</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gallimimus.TrainingHyperparameters.learning_rate"><code class="docutils literal notranslate"><span class="pre">TrainingHyperparameters.learning_rate</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gallimimus.TrainingHyperparameters.dp"><code class="docutils literal notranslate"><span class="pre">TrainingHyperparameters.dp</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gallimimus.TrainingHyperparameters.noise_multiplier"><code class="docutils literal notranslate"><span class="pre">TrainingHyperparameters.noise_multiplier</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gallimimus.TrainingHyperparameters.l2_norm_clip"><code class="docutils literal notranslate"><span class="pre">TrainingHyperparameters.l2_norm_clip</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#gallimimus.train"><code class="docutils literal notranslate"><span class="pre">train()</span></code></a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="codec.html">Codecs</a></li>
 </ul>
 
@@ -72,8 +91,142 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="model">
-<h1>Model<a class="headerlink" href="#model" title="Permalink to this heading"></a></h1>
+  <section id="module-gallimimus">
+<span id="model"></span><h1>Model<a class="headerlink" href="#module-gallimimus" title="Permalink to this heading"></a></h1>
+<p>A generative model for complex and hierarchical data.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="gallimimus.MetaLearner">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gallimimus.</span></span><span class="sig-name descname"><span class="pre">MetaLearner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">codec_in</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.MetaLearner" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>The MetaLearner is the complete generative model. The type of the data it generates is parametrized by the
+provided <code class="docutils literal notranslate"><span class="pre">Codec</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>codec_in</strong> (<a class="reference internal" href="codec.html#gallimimus.codec.Codec" title="gallimimus.codec.Codec"><em>Codec</em></a>) – The codec corresponding to the data type generated by the model.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="gallimimus.MetaLearner.init">
+<span class="sig-name descname"><span class="pre">init</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rng</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.MetaLearner.init" title="Permalink to this definition"></a></dt>
+<dd><p>Initalize the parameters of the model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>rng</strong> – A Jax PRNGKey.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A Pytree of initial parameters.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>flax.core.scope.VariableDict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gallimimus.MetaLearner.loss_and_per_example_grad">
+<span class="sig-name descname"><span class="pre">loss_and_per_example_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.MetaLearner.loss_and_per_example_grad" title="Permalink to this definition"></a></dt>
+<dd><p>For a batch of observations <code class="docutils literal notranslate"><span class="pre">xs</span></code>, compute the average loss and <em>per-instance</em> gradients
+(per-instance gradients are required for DP-SGD, so that they can be clipped).</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gallimimus.MetaLearner.loss_and_grad">
+<span class="sig-name descname"><span class="pre">loss_and_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.MetaLearner.loss_and_grad" title="Permalink to this definition"></a></dt>
+<dd><p>For a batch of observations <code class="docutils literal notranslate"><span class="pre">xs</span></code>, compute the average loss and its associated gradient.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gallimimus.MetaLearner.sample">
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rng</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.MetaLearner.sample" title="Permalink to this definition"></a></dt>
+<dd><p>Sample a batch of chosen size from the model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>params</strong> (<em>flax.core.scope.VariableDict</em>) – </p></li>
+<li><p><strong>rng</strong> – </p></li>
+<li><p><strong>size</strong> (<em>int</em>) – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A batch of chosen size from the model.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gallimimus.TrainingHyperparameters">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gallimimus.</span></span><span class="sig-name descname"><span class="pre">TrainingHyperparameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_epochs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">128</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">learning_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise_multiplier</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">l2_norm_clip</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10000000000.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.TrainingHyperparameters" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Parameters for the training.</p>
+<dl class="field-list simple">
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gallimimus.TrainingHyperparameters.num_epochs">
+<span class="sig-name descname"><span class="pre">num_epochs</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">10</span></em><a class="headerlink" href="#gallimimus.TrainingHyperparameters.num_epochs" title="Permalink to this definition"></a></dt>
+<dd><p>Number of training epochs.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gallimimus.TrainingHyperparameters.batch_size">
+<span class="sig-name descname"><span class="pre">batch_size</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">128</span></em><a class="headerlink" href="#gallimimus.TrainingHyperparameters.batch_size" title="Permalink to this definition"></a></dt>
+<dd><p>Batch size.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gallimimus.TrainingHyperparameters.learning_rate">
+<span class="sig-name descname"><span class="pre">learning_rate</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1.0</span></em><a class="headerlink" href="#gallimimus.TrainingHyperparameters.learning_rate" title="Permalink to this definition"></a></dt>
+<dd><p>Learning rate of the optimizer.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gallimimus.TrainingHyperparameters.dp">
+<span class="sig-name descname"><span class="pre">dp</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></em><a class="headerlink" href="#gallimimus.TrainingHyperparameters.dp" title="Permalink to this definition"></a></dt>
+<dd><p>Trains with SGD if <code class="docutils literal notranslate"><span class="pre">False</span></code>, DP-SGD if <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gallimimus.TrainingHyperparameters.noise_multiplier">
+<span class="sig-name descname"><span class="pre">noise_multiplier</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0.0</span></em><a class="headerlink" href="#gallimimus.TrainingHyperparameters.noise_multiplier" title="Permalink to this definition"></a></dt>
+<dd><p>Noise multiplier for the DP-SGD.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gallimimus.TrainingHyperparameters.l2_norm_clip">
+<span class="sig-name descname"><span class="pre">l2_norm_clip</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">10000000000.0</span></em><a class="headerlink" href="#gallimimus.TrainingHyperparameters.l2_norm_clip" title="Permalink to this definition"></a></dt>
+<dd><p>Gradient clipping norm for the DP=SGD.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gallimimus.train">
+<span class="sig-prename descclassname"><span class="pre">gallimimus.</span></span><span class="sig-name descname"><span class="pre">train</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hyperparams</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dataset</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optimizer_seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.train" title="Permalink to this definition"></a></dt>
+<dd><p>Train the model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model</strong> (<a class="reference internal" href="#gallimimus.MetaLearner" title="gallimimus.model.MetaLearner"><em>MetaLearner</em></a>) – A model to be trained.</p></li>
+<li><p><strong>params</strong> (<em>flax.core.scope.VariableDict</em>) – The flax parameters at initialization.</p></li>
+<li><p><strong>hyperparams</strong> (<a class="reference internal" href="#gallimimus.TrainingHyperparameters" title="gallimimus.training.TrainingHyperparameters"><em>TrainingHyperparameters</em></a>) – Configuration for the training.</p></li>
+<li><p><strong>dataset</strong> (<em>List</em><em>[</em><em>Observation</em><em>]</em>) – A list of observations to train on.</p></li>
+<li><p><strong>optimizer_seed</strong> (<em>int</em>) – Starting seed for the noise in DP-SGD training.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The parameters after training the model according to the hyperparameters.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>flax.core.scope.VariableDict</p>
+</dd>
+</dl>
+</dd></dl>
+
 </section>
 
 

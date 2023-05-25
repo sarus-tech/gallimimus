@@ -44,7 +44,21 @@
               <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="model.html">Model</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Codecs</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Codecs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#gallimimus.codec.Codec"><code class="docutils literal notranslate"><span class="pre">Codec</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#gallimimus.codec.Codec.embed_dim"><code class="docutils literal notranslate"><span class="pre">Codec.embed_dim</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gallimimus.codec.Codec.encode"><code class="docutils literal notranslate"><span class="pre">Codec.encode()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gallimimus.codec.Codec.decode"><code class="docutils literal notranslate"><span class="pre">Codec.decode()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gallimimus.codec.Codec.sample"><code class="docutils literal notranslate"><span class="pre">Codec.sample()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gallimimus.codec.Codec.loss"><code class="docutils literal notranslate"><span class="pre">Codec.loss()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gallimimus.codec.Codec.example"><code class="docutils literal notranslate"><span class="pre">Codec.example()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#gallimimus.codec.CategoricalCodec"><code class="docutils literal notranslate"><span class="pre">CategoricalCodec</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#gallimimus.codec.ListCodec"><code class="docutils literal notranslate"><span class="pre">ListCodec</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#gallimimus.codec.StructCodec"><code class="docutils literal notranslate"><span class="pre">StructCodec</span></code></a></li>
+</ul>
+</li>
 </ul>
 
         </div>
@@ -71,8 +85,173 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="codecs">
-<h1>Codecs<a class="headerlink" href="#codecs" title="Permalink to this heading"></a></h1>
+  <section id="module-gallimimus.codec">
+<span id="codecs"></span><h1>Codecs<a class="headerlink" href="#module-gallimimus.codec" title="Permalink to this heading"></a></h1>
+<p>The codecs</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="gallimimus.codec.Codec">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gallimimus.codec.</span></span><span class="sig-name descname"><span class="pre">Codec</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">embed_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parent=&lt;flax.linen.module._Sentinel</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name=None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.codec.Codec" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ABC</span></code></p>
+<p>The abstract interface of a codec.</p>
+<dl class="field-list simple">
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gallimimus.codec.Codec.embed_dim">
+<span class="sig-name descname"><span class="pre">embed_dim</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#gallimimus.codec.Codec.embed_dim" title="Permalink to this definition"></a></dt>
+<dd><p>Size of the embeddings. Should be the same for all the codecs used.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gallimimus.codec.Codec.encode">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">encode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.codec.Codec.encode" title="Permalink to this definition"></a></dt>
+<dd><p>Encode an observation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>x</strong> (<em>Observation</em>) – An observation of the data type expected by the codec.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><p>A pair containing</p>
+<ul class="simple">
+<li><p>an embedding vector of shape <code class="docutils literal notranslate"><span class="pre">(self.embed_dim,)</span></code></p></li>
+<li><p>a context containing the embeddings for the substructures of <code class="docutils literal notranslate"><span class="pre">x</span></code>.</p></li>
+</ul>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Tuple</em>[Embedding, <em>Context</em>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gallimimus.codec.Codec.decode">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">decode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">conditioning_vector</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">context</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.codec.Codec.decode" title="Permalink to this definition"></a></dt>
+<dd><p>Turn a <code class="docutils literal notranslate"><span class="pre">conditioning_vector</span></code> into a predicted probability distribution,
+using the embeddings in the <code class="docutils literal notranslate"><span class="pre">context</span></code> in places where autoregressive sampling would occur.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>conditioning_vector</strong> (<em>Embedding</em>) – Conditioning vector of shape <code class="docutils literal notranslate"><span class="pre">(self.embed_dim,)</span></code>.</p></li>
+<li><p><strong>context</strong> (<em>Context</em>) – Embeddings of the substructures as given by <code class="docutils literal notranslate"><span class="pre">encode</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A representation of the probability distribution predicted from the conditioning vector.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Prediction</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gallimimus.codec.Codec.sample">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">conditioning_vector</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.codec.Codec.sample" title="Permalink to this definition"></a></dt>
+<dd><p>Sample a single observation, as conditioned by the <code class="docutils literal notranslate"><span class="pre">conditioning_vector</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>conditioning_vector</strong> (<em>Embedding</em>) – Conditioning vector of shape <code class="docutils literal notranslate"><span class="pre">(self.embed_dim,)</span></code>.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A sample from the probability predicted by the conditioning vector, and its embedding.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Tuple</em>[<em>Observation</em>, Embedding]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gallimimus.codec.Codec.loss">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">loss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prediction</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.codec.Codec.loss" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the negative log-likelyhood of <code class="docutils literal notranslate"><span class="pre">x</span></code> in the provided distribution.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<em>Observation</em>) – An observation of the data type expected by the codec.</p></li>
+<li><p><strong>prediction</strong> (<em>Prediction</em>) – A representation of a probability distribution.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The negative log-likelyhood of <code class="docutils literal notranslate"><span class="pre">x</span></code> in this distribution.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Array</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gallimimus.codec.Codec.example">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">example</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.codec.Codec.example" title="Permalink to this definition"></a></dt>
+<dd><p>Convenience function which provides an example input for the model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>An example observation of the data type expected by the codec.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Observation</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gallimimus.codec.CategoricalCodec">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gallimimus.codec.</span></span><span class="sig-name descname"><span class="pre">CategoricalCodec</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">embed_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parent=&lt;flax.linen.module._Sentinel</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name=None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.codec.CategoricalCodec" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gallimimus.codec.Codec" title="gallimimus.codec.abstract_codec.Codec"><code class="xref py py-class docutils literal notranslate"><span class="pre">Codec</span></code></a></p>
+<p>Handles an integer in [0, <code class="docutils literal notranslate"><span class="pre">vocab_size</span></code>-1].</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>embed_dim</strong> (<em>int</em>) – size of the embeddings.</p></li>
+<li><p><strong>vocab_size</strong> (<em>int</em>) – Number of possible values</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gallimimus.codec.ListCodec">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gallimimus.codec.</span></span><span class="sig-name descname"><span class="pre">ListCodec</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">embed_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subcodec_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_heads</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_blocks</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_len</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">buffer_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parent=&lt;flax.linen.module._Sentinel</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name=None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.codec.ListCodec" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gallimimus.codec.Codec" title="gallimimus.codec.abstract_codec.Codec"><code class="xref py py-class docutils literal notranslate"><span class="pre">Codec</span></code></a></p>
+<p>Formally the ListCodec behaves like a <code class="docutils literal notranslate"><span class="pre">StructCodec[Categorical(max_len+1),</span> <span class="pre">subcodec,</span> <span class="pre">...,</span> <span class="pre">subcodec]</span></code> where <code class="docutils literal notranslate"><span class="pre">subcodec</span></code>
+is repeated <code class="docutils literal notranslate"><span class="pre">buffer_size</span></code> times, except that the loss of <code class="docutils literal notranslate"><span class="pre">(len_x,</span> <span class="pre">items_x)</span></code> only looks at the <code class="docutils literal notranslate"><span class="pre">len_x</span></code> first columns.</p>
+<p>For efficiency reasons, a vectorized version of the <code class="docutils literal notranslate"><span class="pre">subcodec</span></code> is used (otherwise jit compilation unrolls the loops).
+Due to this, an observation is a Pytree where the items are stacked on the first dimension of their leaves.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>embed_dim</strong> (<em>int</em>) – Size of the embeddings.</p></li>
+<li><p><strong>subcodec_in</strong> (<a class="reference internal" href="#gallimimus.codec.Codec" title="gallimimus.codec.Codec"><em>Codec</em></a>) – Codec used to generate the items in the list.</p></li>
+<li><p><strong>n_heads</strong> (<em>int</em>) – Number of transformer heads.</p></li>
+<li><p><strong>n_blocks</strong> (<em>int</em>) – Number of transformer blocks.</p></li>
+<li><p><strong>max_len</strong> (<em>int</em>) – Maximum size of the generated list.</p></li>
+<li><p><strong>buffer_size</strong> (<em>int</em>) – Size of the buffer used for training. Must be smaller than <code class="docutils literal notranslate"><span class="pre">max_len</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gallimimus.codec.StructCodec">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gallimimus.codec.</span></span><span class="sig-name descname"><span class="pre">StructCodec</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">embed_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subcodecs_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_heads=4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_blocks=1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parent=&lt;flax.linen.module._Sentinel</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name=None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.codec.StructCodec" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gallimimus.codec.Codec" title="gallimimus.codec.abstract_codec.Codec"><code class="xref py py-class docutils literal notranslate"><span class="pre">Codec</span></code></a></p>
+<p>A codec for tabular data where the columns are generated each using their own sub-codec, as provided
+by <code class="docutils literal notranslate"><span class="pre">subcodecs_in</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>embed_dim</strong> (<em>int</em>) – Size of the embeddings.</p></li>
+<li><p><strong>subcodecs_in</strong> (<em>List</em><em>[</em><a class="reference internal" href="#gallimimus.codec.Codec" title="gallimimus.codec.Codec"><em>Codec</em></a><em>]</em>) – List of the Codecs used for each column.</p></li>
+<li><p><strong>n_heads</strong> (<em>int</em>) – Number of transformer heads.</p></li>
+<li><p><strong>n_blocks</strong> (<em>int</em>) – Number of transformer blocks.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
 </section>
 
 
