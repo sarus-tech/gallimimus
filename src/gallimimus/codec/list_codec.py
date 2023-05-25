@@ -55,6 +55,9 @@ class ListCodec(Codec):
     For efficiency reasons, a vectorized version of the ``subcodec`` is used (otherwise jit compilation unrolls the loops).
     Due to this, an observation is a Pytree where the items are stacked on the first dimension of their leaves.
 
+    If the observations of the subcodec are of type ``SubObservation``, observations for the ``ListCodec``
+    are of type ``Tuple[jax.Array[dtype=int, shape=()], SubObservation]``
+
     :param embed_dim: Size of the embeddings.
     :param subcodec_in: Codec used to generate the items in the list.
     :param n_heads: Number of transformer heads.

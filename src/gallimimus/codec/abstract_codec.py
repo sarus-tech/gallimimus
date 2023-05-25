@@ -55,11 +55,11 @@ class Codec(nn.Module, abc.ABC):
     def loss(
         self, x: Observation, prediction: Prediction
     ) -> jnp.ndarray:  # of shape ()
-        """Returns the negative log-likelyhood of ``x`` in the provided distribution.
+        """Returns the negative log-likelihood of ``x`` in the provided distribution.
 
         :param x: An observation of the data type expected by the codec.
         :param prediction: A representation of a probability distribution.
-        :return: The negative log-likelyhood of ``x`` in this distribution."""
+        :return: The negative log-likelihood of ``x`` in this distribution."""
         ...
 
     @abc.abstractmethod
