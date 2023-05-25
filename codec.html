@@ -87,7 +87,7 @@
              
   <section id="module-gallimimus.codec">
 <span id="codecs"></span><h1>Codecs<a class="headerlink" href="#module-gallimimus.codec" title="Permalink to this heading"></a></h1>
-<p>The codecs</p>
+<p>Each codec implements the <code class="docutils literal notranslate"><span class="pre">Codec</span></code> interface for a specific data-type.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="gallimimus.codec.Codec">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gallimimus.codec.</span></span><span class="sig-name descname"><span class="pre">Codec</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">embed_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parent=&lt;flax.linen.module._Sentinel</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name=None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.codec.Codec" title="Permalink to this definition"></a></dt>
@@ -164,7 +164,7 @@ using the embeddings in the <code class="docutils literal notranslate"><span cla
 <dl class="py method">
 <dt class="sig sig-object py" id="gallimimus.codec.Codec.loss">
 <em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">loss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prediction</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.codec.Codec.loss" title="Permalink to this definition"></a></dt>
-<dd><p>Returns the negative log-likelyhood of <code class="docutils literal notranslate"><span class="pre">x</span></code> in the provided distribution.</p>
+<dd><p>Returns the negative log-likelihood of <code class="docutils literal notranslate"><span class="pre">x</span></code> in the provided distribution.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -173,7 +173,7 @@ using the embeddings in the <code class="docutils literal notranslate"><span cla
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The negative log-likelyhood of <code class="docutils literal notranslate"><span class="pre">x</span></code> in this distribution.</p>
+<dd class="field-even"><p>The negative log-likelihood of <code class="docutils literal notranslate"><span class="pre">x</span></code> in this distribution.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><em>Array</em></p>
@@ -220,6 +220,8 @@ using the embeddings in the <code class="docutils literal notranslate"><span cla
 is repeated <code class="docutils literal notranslate"><span class="pre">buffer_size</span></code> times, except that the loss of <code class="docutils literal notranslate"><span class="pre">(len_x,</span> <span class="pre">items_x)</span></code> only looks at the <code class="docutils literal notranslate"><span class="pre">len_x</span></code> first columns.</p>
 <p>For efficiency reasons, a vectorized version of the <code class="docutils literal notranslate"><span class="pre">subcodec</span></code> is used (otherwise jit compilation unrolls the loops).
 Due to this, an observation is a Pytree where the items are stacked on the first dimension of their leaves.</p>
+<p>If the observations of the subcodec are of type <code class="docutils literal notranslate"><span class="pre">SubObservation</span></code>, observations for the <code class="docutils literal notranslate"><span class="pre">ListCodec</span></code>
+are of type <code class="docutils literal notranslate"><span class="pre">Tuple[jax.Array[dtype=int,</span> <span class="pre">shape=()],</span> <span class="pre">SubObservation]</span></code></p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">

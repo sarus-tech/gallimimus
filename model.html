@@ -47,9 +47,9 @@
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Model</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#gallimimus.MetaLearner"><code class="docutils literal notranslate"><span class="pre">MetaLearner</span></code></a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#gallimimus.MetaLearner.init"><code class="docutils literal notranslate"><span class="pre">MetaLearner.init()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#gallimimus.MetaLearner.loss_and_per_example_grad"><code class="docutils literal notranslate"><span class="pre">MetaLearner.loss_and_per_example_grad()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#gallimimus.MetaLearner.loss_and_grad"><code class="docutils literal notranslate"><span class="pre">MetaLearner.loss_and_grad()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#gallimimus.MetaLearner.sample"><code class="docutils literal notranslate"><span class="pre">MetaLearner.sample()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gallimimus.MetaLearner.loss_and_grad"><code class="docutils literal notranslate"><span class="pre">MetaLearner.loss_and_grad()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gallimimus.MetaLearner.loss_and_per_example_grad"><code class="docutils literal notranslate"><span class="pre">MetaLearner.loss_and_per_example_grad()</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#gallimimus.TrainingHyperparameters"><code class="docutils literal notranslate"><span class="pre">TrainingHyperparameters</span></code></a><ul>
@@ -111,7 +111,7 @@ provided <code class="docutils literal notranslate"><span class="pre">Codec</spa
 <dd><p>Initalize the parameters of the model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>rng</strong> – A Jax PRNGKey.</p>
+<dd class="field-odd"><p><strong>rng</strong> (<em>PRNGKeyArray</em>) – A Jax PRNGKey.</p>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>A Pytree of initial parameters.</p>
@@ -123,36 +123,63 @@ provided <code class="docutils literal notranslate"><span class="pre">Codec</spa
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="gallimimus.MetaLearner.loss_and_per_example_grad">
-<span class="sig-name descname"><span class="pre">loss_and_per_example_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.MetaLearner.loss_and_per_example_grad" title="Permalink to this definition"></a></dt>
-<dd><p>For a batch of observations <code class="docutils literal notranslate"><span class="pre">xs</span></code>, compute the average loss and <em>per-instance</em> gradients
-(per-instance gradients are required for DP-SGD, so that they can be clipped).</p>
+<dt class="sig sig-object py" id="gallimimus.MetaLearner.sample">
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rng</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.MetaLearner.sample" title="Permalink to this definition"></a></dt>
+<dd><p>Sample a batch of chosen size from the model from the distribution represented by the provided parameters.</p>
 <dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>params</strong> (<em>flax.core.scope.VariableDict</em>) – A Pytree of parameters.</p></li>
+<li><p><strong>rng</strong> (<em>PRNGKeyArray</em>) – A Jax PRNGKey.</p></li>
+<li><p><strong>size</strong> (<em>int</em>) – The number of samples.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A batch of samples of chosen size from the model, stacked on the first dimension of the leaves.</p>
+</dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gallimimus.MetaLearner.loss_and_grad">
 <span class="sig-name descname"><span class="pre">loss_and_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.MetaLearner.loss_and_grad" title="Permalink to this definition"></a></dt>
-<dd><p>For a batch of observations <code class="docutils literal notranslate"><span class="pre">xs</span></code>, compute the average loss and its associated gradient.</p>
+<dd><p>For a batch of observations <code class="docutils literal notranslate"><span class="pre">xs</span></code>, compute the average loss (the NLL of <code class="docutils literal notranslate"><span class="pre">x</span></code> in the distribution represented
+by <code class="docutils literal notranslate"><span class="pre">params</span></code>) and its associated gradient.</p>
 <dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>params</strong> (<em>flax.core.scope.VariableDict</em>) – A Pytree of parameters.</p></li>
+<li><p><strong>xs</strong> (<em>Observation</em>) – A batch of observations, stacked on the first dimension of the leaves.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A tuple containing the average loss of the batch (an array of shape <code class="docutils literal notranslate"><span class="pre">()</span></code>) and its gradient with respect to the parameters
+(a Pytree of the same shape as <code class="docutils literal notranslate"><span class="pre">params</span></code>).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Tuple</em>[<em>Array</em>, <em>Any</em>]</p>
+</dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="gallimimus.MetaLearner.sample">
-<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rng</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.MetaLearner.sample" title="Permalink to this definition"></a></dt>
-<dd><p>Sample a batch of chosen size from the model.</p>
+<dt class="sig sig-object py" id="gallimimus.MetaLearner.loss_and_per_example_grad">
+<span class="sig-name descname"><span class="pre">loss_and_per_example_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gallimimus.MetaLearner.loss_and_per_example_grad" title="Permalink to this definition"></a></dt>
+<dd><p>For a batch of observations <code class="docutils literal notranslate"><span class="pre">xs</span></code>, compute the average loss and <em>per-instance</em> gradients
+(per-instance gradients are required for DP-SGD, so that they can be clipped).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>params</strong> (<em>flax.core.scope.VariableDict</em>) – </p></li>
-<li><p><strong>rng</strong> – </p></li>
-<li><p><strong>size</strong> (<em>int</em>) – </p></li>
+<li><p><strong>params</strong> (<em>flax.core.scope.VariableDict</em>) – A Pytree of parameters.</p></li>
+<li><p><strong>xs</strong> (<em>Observation</em>) – A batch of observations, stacked on the first dimension of the leaves.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>A batch of chosen size from the model.</p>
+<dd class="field-even"><p>A tuple containing the average loss of the batch (an array of shape <code class="docutils literal notranslate"><span class="pre">()</span></code>) and the <em>per-instance</em> gradient with respect to the parameters
+(a stack of Pytrees of the same shape as <code class="docutils literal notranslate"><span class="pre">params</span></code>, stacked on the first dimension of the leaves).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Tuple</em>[<em>Array</em>, <em>Any</em>]</p>
 </dd>
 </dl>
 </dd></dl>
