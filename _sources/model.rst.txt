@@ -1,0 +1,6 @@
+Model
+==================
+
+
+.. automodule:: gallimimus
+    :members:
