@@ -21,7 +21,6 @@ class UnitMetaLearner(nn.Module):
     codec_in: Codec
 
     def setup(self):
-        """:meta private:"""
         self.codec = self.codec_in.clone()
 
         self.starting_embedding = self.param(

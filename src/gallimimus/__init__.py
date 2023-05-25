@@ -1,4 +1,4 @@
-"""The generative model."""
+"""A generative model for complex and hierarchical data."""
 from .model import MetaLearner
 from .training import TrainingHyperparameters, train
 
