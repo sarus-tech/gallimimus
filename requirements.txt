@@ -1,6 +1,0 @@
--e .
-black
-numpy
-sphinx
-sphinx-autoapi
-sphinx-rtd-theme
