@@ -7,8 +7,8 @@ from __future__ import annotations
 import pathlib
 import sys
 
-module_path = pathlib.Path.cwd().parent.parent / "src"
-sys.path.insert(0, module_path)
+# module_path = pathlib.Path.cwd().parent.parent / "src"
+# sys.path.insert(0, str(module_path))
 
 
 # -- Project information -----------------------------------------------------
