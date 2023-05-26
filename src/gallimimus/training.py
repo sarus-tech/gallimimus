@@ -35,7 +35,7 @@ class TrainingHyperparameters:
     noise_multiplier: float = 0.0
     """Noise multiplier for the DP-SGD."""
     l2_norm_clip: float = 1e10
-    """Gradient clipping norm for the DP=SGD."""
+    """Norm of the gradient clipping for the DP-SGD."""
 
 
 def train(
@@ -89,7 +89,7 @@ def train(
 
     try:
         for i in range(hyperparams.num_epochs):
-            dataset_i = dataset[:]
+            dataset_i = dataset[:]  # copy the dataset
             random.Random(i).shuffle(dataset_i)
 
             losses = []

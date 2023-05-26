@@ -25,6 +25,9 @@ class StructCodec(Codec):
     """A codec for tabular data where the columns are generated each using their own sub-codec, as provided
     by ``subcodecs_in``.
 
+    If ``subcodecs_in = [subcodec_1, ..., subcodec_n]`` and ``subcodec_i`` handles type SubObservation_i,
+    an observation has type ``Tuple[SubObservation_1, ..., SubObservation_n]``.
+
     :param embed_dim: Size of the embeddings.
     :param subcodecs_in: List of the Codecs used for each column.
     :param n_heads: Number of transformer heads.

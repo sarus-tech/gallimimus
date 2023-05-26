@@ -14,10 +14,10 @@ Prediction = TypeVar("Prediction")
 
 
 class Codec(nn.Module, abc.ABC):
-    """The abstract interface of a codec."""
+    """The abstract interface of a codec. Each concrete codec implements the ``Codec`` interface for a specific data-type."""
 
     embed_dim: int
-    """Size of the embeddings. Should be the same for all the codecs used."""
+    """Size of the embeddings. Should be the same for all the codecs in the tree of codecs."""
 
     @abc.abstractmethod
     def encode(self, x: Observation) -> Tuple[Embedding, Context]:
@@ -26,8 +26,8 @@ class Codec(nn.Module, abc.ABC):
         :param x: An observation of the data type expected by the codec.
         :return: A pair containing
 
-             - an embedding vector of shape ``(self.embed_dim,)``
-             - a context containing the embeddings for the substructures of ``x``."""
+         - an embedding vector of shape ``(self.embed_dim,)``
+         - a context containing the embeddings for the substructures of ``x``."""
         ...
 
     @abc.abstractmethod
