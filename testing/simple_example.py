@@ -80,7 +80,6 @@ model = MetaLearner(
 
 ### Train the model
 rng = jax.random.PRNGKey(0)
-N = 5000
 
 
 params = model.init(rng=rng)
@@ -88,15 +87,20 @@ params = model.init(rng=rng)
 
 hyperparams = TrainingHyperparameters(
     num_epochs=100,
-    batch_size=100,
+    batch_size=1000,
     learning_rate=1e-1,
     dp=False,
     noise_multiplier=0.3,
     l2_norm_clip=1.0,
 )
 
+split = int(0.95 * N)
 trained_params = train(
-    model=model, params=params, hyperparams=hyperparams, dataset=dataset
+    model=model,
+    params=params,
+    hyperparams=hyperparams,
+    dataset=dataset[:split],
+    eval_dataset=dataset[split:],
 )
 
 s = model.sample(trained_params, rng=jax.random.PRNGKey(0), size=5)

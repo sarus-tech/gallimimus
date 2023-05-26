@@ -1,12 +1,13 @@
 from __future__ import annotations
 import random
 import dataclasses
+import time
 
 import jax
 import jax.numpy as jnp
 import optax
 
-from typing import List, Any
+from typing import List, Any, Optional
 from flax.core.scope import VariableDict
 
 from gallimimus.model import MetaLearner
@@ -43,6 +44,7 @@ def train(
     params: VariableDict,
     hyperparams: TrainingHyperparameters,
     dataset: List[Observation],  # List of observations
+    eval_dataset: Optional[List[Observation]],
     optimizer_seed: int = 0,
 ) -> VariableDict:
     """Train the model.
@@ -87,21 +89,57 @@ def train(
 
     opt_state = tx.init(params)
 
+    def train_epoch(params, opt_state):
+        dataset_i = dataset[:]  # copy the dataset
+        random.Random(i).shuffle(dataset_i)
+
+        losses = []
+        for j in range(n_batches):
+            batch_list = dataset[j * bs : (j + 1) * bs]
+            batch = tree_transpose(batch_list)
+
+            params, opt_state, loss_val = train_step(params, opt_state, batch)
+            losses.append(loss_val)
+
+        return params, opt_state, losses
+
+    overflow_obs = len(eval_dataset) % bs
+    if overflow_obs != 0:
+        padding = [model.example] * (bs - overflow_obs)
+        padded_eval_dataset = eval_dataset + padding
+    else:
+        padded_eval_dataset = eval_dataset
+
+    n_eval_batches = len(padded_eval_dataset) // bs
+    loss_fun = jax.jit(model.batch_loss)
+
+    def eval_epoch(params):
+        losses = []
+        for j in range(n_eval_batches):
+            batch_list = eval_dataset[j * bs : (j + 1) * bs]
+            batch = tree_transpose(batch_list)
+
+            loss = loss_fun(params, batch)
+            losses.append(loss)
+
+        loss_epoch = float(jnp.mean(jnp.array(losses)[: len(eval_dataset)]))
+        return loss_epoch
+
     try:
         for i in range(hyperparams.num_epochs):
-            dataset_i = dataset[:]  # copy the dataset
-            random.Random(i).shuffle(dataset_i)
+            t0 = time.perf_counter()
+            params, opt_state, losses = train_epoch(params, opt_state)
+            delta_t = time.perf_counter() - t0
 
-            losses = []
-            for j in range(n_batches):
-                batch_list = dataset[j * bs : (j + 1) * bs]
-                batch = tree_transpose(batch_list)
+            loss_epoch = float(jnp.mean(jnp.array(losses)))
 
-                params, opt_state, loss_val = train_step(params, opt_state, batch)
-                losses.append(loss_val)
+            t0 = time.perf_counter()
+            eval_loss_epoch = eval_epoch(params)
+            delta_t2 = time.perf_counter() - t0
 
-            loss_epoch = float(jnp.sum(jnp.array(losses)))
-            print(f"{i}: {loss_epoch=}")
+            print(
+                f"{i}: loss={loss_epoch:.3f}, eval={eval_loss_epoch:.3f} (t={delta_t:.1f}, t={delta_t2:.1f})"
+            )
 
         return params
 
