@@ -116,6 +116,20 @@ class MetaLearner:
         samples, embeddings = vmapped_sample_fun(params, rngs)
         return samples
 
+    def batch_loss(
+        self, params: VariableDict, xs: Observation
+    ) -> Tuple[jnp.ndarray, Any]:
+        """For a batch of observations ``xs``, compute the average loss (the average NLL of ``x`` in the distribution represented
+        by ``params``) and its associated gradient.
+
+        :param params: A Pytree of parameters.
+        :param xs: A batch of observations, stacked on the first dimension of the leaves.
+        :return: A tuple containing the average loss of the batch (an array of shape ``()``) and its gradient with respect to the parameters
+            (a Pytree of the same shape as ``params``)."""
+        vmapped_apply_fun = jax.vmap(self.apply_fun, in_axes=(None, 0))
+        scalar_apply_fun = lambda params, xs: vmapped_apply_fun(params, xs).mean()
+        return scalar_apply_fun(params, xs)
+
     def loss_and_grad(
         self, params: VariableDict, xs: Observation
     ) -> Tuple[jnp.ndarray, Any]:
@@ -127,10 +141,7 @@ class MetaLearner:
         :return: A tuple containing the average loss of the batch (an array of shape ``()``) and its gradient with respect to the parameters
             (a Pytree of the same shape as ``params``)."""
         # vmap first, average the losses, then grad to obtain batch-level gradient
-        vmapped_apply_fun = jax.vmap(self.apply_fun, in_axes=(None, 0))
-        scalar_apply_fun = lambda params, xs: vmapped_apply_fun(params, xs).mean()
-        grad_vmapped_apply_fun = jax.value_and_grad(fun=scalar_apply_fun)
-
+        grad_vmapped_apply_fun = jax.value_and_grad(fun=self.batch_loss)
         batch_loss, batch_grad = grad_vmapped_apply_fun(params, xs)
         return batch_loss, batch_grad
 
