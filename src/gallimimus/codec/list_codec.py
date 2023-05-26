@@ -84,8 +84,8 @@ class ListCodec(Codec):
 
         self.vmapped_item_codec = vmap_clone_codec(self.subcodec_in)
 
-        self.encoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks)
-        self.decoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks)
+        self.encoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks, embed_dim=self.embed_dim)
+        self.decoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks, embed_dim=self.embed_dim)
 
     def encode(self, x: ListObservation) -> Tuple[Embedding, ListContext]:
         x_len, x_items = x

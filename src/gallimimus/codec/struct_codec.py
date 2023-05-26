@@ -40,8 +40,8 @@ class StructCodec(Codec):
 
     def setup(self):
         self.subcodecs = [subcodec.clone() for subcodec in self.subcodecs_in]
-        self.encoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks)
-        self.decoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks)
+        self.encoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks, embed_dim=self.embed_dim)
+        self.decoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks, embed_dim=self.embed_dim)
 
     def encode(self, x: StructObservation) -> Tuple[Embedding, StructContext]:
         # apply sub-codec encoders to each column independently
