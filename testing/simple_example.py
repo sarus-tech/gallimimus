@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+import optax
 
 from gallimimus import MetaLearner, TrainingHyperparameters, train
 from gallimimus.codec import CategoricalCodec, ListCodec, StructCodec
@@ -8,7 +9,7 @@ from jax import config
 
 config.update("jax_debug_nans", True)
 
-embed_dim = 8
+embed_dim = 32
 N = 10000
 
 # let's create a dataset where each observation is
@@ -56,8 +57,8 @@ l_codec = ListCodec(
     subcodec_in=mus_codec,
     max_len=max_len * 2,
     buffer_size=lam,
-    n_heads=4,
-    n_blocks=1,
+    n_heads=8,
+    n_blocks=2,
 )
 
 is_long_codec = CategoricalCodec(
@@ -67,8 +68,8 @@ is_long_codec = CategoricalCodec(
 
 struct_codec = StructCodec(
     embed_dim=embed_dim,
-    n_heads=4,
-    n_blocks=1,
+    n_heads=8,
+    n_blocks=2,
     subcodecs_in=[mus_codec, l_codec, is_long_codec],
 )
 
@@ -88,21 +89,26 @@ params = model.init(rng=rng)
 hyperparams = TrainingHyperparameters(
     num_epochs=100,
     batch_size=1000,
-    learning_rate=1e-1,
+
     dp=False,
     noise_multiplier=0.3,
     l2_norm_clip=1.0,
 )
 
 split = int(0.95 * N)
+
+optimizer = optax.adamaxw(
+    learning_rate=1e-1,
+)
 trained_params = train(
     model=model,
     params=params,
+    optimizer=optimizer,
     hyperparams=hyperparams,
     dataset=dataset[:split],
     eval_dataset=dataset[split:],
 )
 
-s = model.sample(trained_params, rng=jax.random.PRNGKey(0), size=5)
+s = model.sample(trained_params, rng=jax.random.PRNGKey(0), size=1)
 
 print(s)

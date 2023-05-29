@@ -28,8 +28,6 @@ class TrainingHyperparameters:
     """Number of training epochs."""
     batch_size: int = 128
     """Batch size."""
-    learning_rate: float = 1.0
-    """Learning rate of the optimizer."""
 
     dp: bool = False
     """Trains with SGD if ``False``, DP-SGD if ``True``."""
@@ -43,6 +41,7 @@ def train(
     model: MetaLearner,
     params: VariableDict,
     hyperparams: TrainingHyperparameters,
+    optimizer,
     dataset: List[Observation],  # List of observations
     eval_dataset: Optional[List[Observation]],
     optimizer_seed: int = 0,
@@ -64,14 +63,12 @@ def train(
                 noise_multiplier=hyperparams.noise_multiplier,
                 seed=optimizer_seed,
             ),
-            optax.sgd(learning_rate=hyperparams.learning_rate),
+            optimizer,
         )
         # `differentially_private_aggregate` takes the per-instance gradients
         apply_fn = model.loss_and_per_example_grad
     else:
-        tx = optax.sgd(
-            learning_rate=hyperparams.learning_rate,
-        )
+        tx = optimizer
         # sgd takes the regular batch gradients
         apply_fn = model.loss_and_grad
 
@@ -79,7 +76,7 @@ def train(
     @jax.jit
     def train_step(params, opt_state, inputs):
         loss, grads = apply_fn(params, inputs)
-        updates, opt_state = tx.update(grads, opt_state)
+        updates, opt_state = tx.update(grads, opt_state, params=params)
         params = optax.apply_updates(params, updates)
         return params, opt_state, loss
 
