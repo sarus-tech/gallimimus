@@ -13,95 +13,14 @@ CategoricalObservation = jax.Array  # of shape () and dtype int
 CategoricalContext = None
 CategoricalPrediction = jax.Array  # un-normalized logits of shape (vocab_size,)
 
-from flax.core.scope import VariableDict
-from jax.random import KeyArray
 
-FilterFunction = Callable[[List[str], jax.Array], bool]
-
-
-def init_lora_params(
-    rng: KeyArray,
-    params: VariableDict,
-    filter_fn: FilterFunction,
-    r: int,
-) -> VariableDict:
-    """Initialize the PyTree containing the low-rank perturbations.
-
-    :param rng: a jax PRNGKey
-    :param params: the PyTree of the pretrained parameters
-    :param filter_fn: A function of signature ``(param_name: t.List[str], param: jax.Array) -> bool`` deciding if a parameter is finetuned.
-    :param r: The rank of the LoRA approximation.
-    :return: A PyTree which is a subset of ``pretrained_params`` and contains the initialized low-rank perturbations
-    """
-    params_flat = flax.traverse_util.flatten_dict(
-        params,
-    )
-
-    rngs = jax.random.split(key=rng, num=len(params_flat))
-
-    def _init_lora_params(param, rng):
-        shape = param.shape
-        assert len(shape) == 2
-
-        a, b = shape[0], shape[-1]
-        A = jax.random.normal(key=rng, shape=(a, r))
-        B = jnp.zeros(shape=(r, b))
-        return A, B
-
-    lora_params_flat = {
-        param_name: _init_lora_params(param, rng)
-        for rng, (param_name, param) in zip(rngs, params_flat.items())
-        if filter_fn(param_name, param)
-    }
-    lora_params = flax.traverse_util.unflatten_dict(lora_params_flat)
-    return lora_params
-
-
-def lora_combine_vars(
-    pretrained_var: jax.Array,
-    lora_vars: Tuple[jax.Array, jax.Array],
-    alpha: float = 1.0,
-):
-    A, B = lora_vars
-    return pretrained_var + alpha * A @ B
-
-
-def lora_combine_params(
-    pretrained_params: VariableDict,
-    lora_params: VariableDict,
-    alpha: float = 1.0,
-) -> VariableDict:
-    """Adds the LoRA fine-tuning to the pretrained parameters.
-
-    :param pretrained_params: A PyTree containing the original parameters
-    :param lora_params: A PyTree which is a subset of ``pretrained_params`` and contains the trained low-rank perturbations to add
-    :param alpha: scaling of the perturbation in the sum
-    :return: A PyTree containing the updated parameters (same shape as ``pretrained_params``)
-    """
-    lora_params_flat = flax.traverse_util.flatten_dict(
-        lora_params,
-    )
-    pretrained_params_flat = flax.traverse_util.flatten_dict(pretrained_params)
-
-    total_flat = {
-        k: (
-            lora_combine_vars(pretrained_param, lora_params_flat[k], alpha)
-            if k in lora_params_flat
-            else pretrained_param
-        )
-        for k, pretrained_param in pretrained_params_flat.items()
-    }
-
-    return flax.traverse_util.unflatten_dict(total_flat)
+from lora_flax.lora import init_lora_params, lora_combine_params, FilterFunction
 
 
 class LoraCodec(Codec):
-    """Handles an integer in [0, ``vocab_size``-1].
+    """TODO
 
-    An observation is a jax.Array of shape ``()`` containing an ``int`` in [0, ``vocab_size``-1].
-
-    :param embed_dim: size of the embeddings.
-    :param vocab_size: Number of possible values"""
+    :param embed_dim: size of the embeddings."""
 
     subcodec_in: Codec
     lora_module_name: str
@@ -162,6 +81,3 @@ class LoraCodec(Codec):
 
     def example(self, shared_dicts):
         return self.subcodec_in.example(shared_dicts=shared_dicts)
-
-    def init_pass(self):
-        return super(LoraCodec, self).init_pass()
