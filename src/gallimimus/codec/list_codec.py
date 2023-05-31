@@ -84,15 +84,21 @@ class ListCodec(Codec):
 
         self.vmapped_item_codec = vmap_clone_codec(self.subcodec_in)
 
-        self.encoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks, embed_dim=self.embed_dim)
-        self.decoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks, embed_dim=self.embed_dim)
+        self.encoder = Transformer(
+            num_heads=self.n_heads, num_blocks=self.n_blocks, embed_dim=self.embed_dim
+        )
+        self.decoder = Transformer(
+            num_heads=self.n_heads, num_blocks=self.n_blocks, embed_dim=self.embed_dim
+        )
 
-    def encode(self, x: ListObservation) -> Tuple[Embedding, ListContext]:
+    def encode(self, x: ListObservation, shared_dicts) -> Tuple[Embedding, ListContext]:
         x_len, x_items = x
 
         # encode the length and items independently
-        embedding_len, _ = self.len_codec.encode(x=x_len)
-        embedding_items, subcontexts = self.vmapped_item_codec.encode(x_items)
+        embedding_len, _ = self.len_codec.encode(x=x_len, shared_dicts=shared_dicts)
+        embedding_items, subcontexts = self.vmapped_item_codec.encode(
+            x_items, shared_dicts
+        )
 
         # transform the embeddings with the encoder
         embeddings = jnp.vstack([embedding_len, embedding_items])  # length N + 1
@@ -101,7 +107,7 @@ class ListCodec(Codec):
         return encoded_embeddings[-1], (encoded_embeddings, subcontexts)
 
     def decode(
-        self, conditioning_vector: Embedding, context: ListContext
+        self, conditioning_vector: Embedding, context: ListContext, shared_dicts
     ) -> ListPrediction:
         encoded_embeddings, subcontexts = context
 
@@ -114,19 +120,25 @@ class ListCodec(Codec):
         # decode the length and items independently
         conditioning_len = conditioning_vectors[0]
         pred_len = self.len_codec.decode(
-            conditioning_vector=conditioning_len, context=None
+            conditioning_vector=conditioning_len,
+            context=None,
+            shared_dicts=shared_dicts,
         )
 
         conditioning_items = conditioning_vectors[1:]
-        pred_items = self.vmapped_item_codec.decode(conditioning_items, subcontexts)
+        pred_items = self.vmapped_item_codec.decode(
+            conditioning_items, subcontexts, shared_dicts
+        )
 
         return (pred_len, pred_items)
 
     def sample(
-        self, conditioning_vector: Embedding
+        self, conditioning_vector: Embedding, shared_dicts
     ) -> Tuple[ListObservation, Embedding]:
         # sample the length
-        sampled_len, embedding_len = self.len_codec.sample(conditioning_vector)
+        sampled_len, embedding_len = self.len_codec.sample(
+            conditioning_vector, shared_dicts
+        )
 
         # sample the items auto-regressively
         def sample_one(self, carry):
@@ -141,7 +153,7 @@ class ListCodec(Codec):
             # add a dimension because the sampling function is vectorized
             conditioning_vector_i = conditioning_vectors[i + 1][None, :]
             sample_i, embedding_i = self.vmapped_item_codec.sample(
-                conditioning_vector_i
+                conditioning_vector_i, shared_dicts
             )
             embeddings = embeddings.at[i + 1].set(embedding_i[0])
 
@@ -166,25 +178,29 @@ class ListCodec(Codec):
         encoded_embeddings = self.encoder(embeddings)
         return (sampled_len, samples), encoded_embeddings[-1]
 
-    def loss(self, x: ListObservation, prediction: ListPrediction) -> jnp.ndarray:
+    def loss(
+        self, x: ListObservation, prediction: ListPrediction, shared_dicts
+    ) -> jnp.ndarray:
         x_len, x_items = x
         pred_len, pred_items = prediction
 
-        loss_len = self.len_codec.loss(x=x_len, prediction=pred_len)
+        loss_len = self.len_codec.loss(
+            x=x_len, prediction=pred_len, shared_dicts=shared_dicts
+        )
 
         mask = jnp.arange(self.buffer_size) < x_len
         losses_item = (
-            self.vmapped_item_codec.loss(x_items, pred_items) * mask
+            self.vmapped_item_codec.loss(x_items, pred_items, shared_dicts) * mask
         ).sum()  # / x_len
         # TODO what loss do we want for a list? NLL is too restrictive (and badly conditioned for long lists)
         return loss_len + losses_item
 
-    def example(self):
+    def example(self, shared_dicts):
         example_len = jnp.array(self.max_len - 1)
 
         # stack by hand instead of using the vmapped subcodec because it only exists after `setup` is done
         example_items_list = [
-            self.subcodec_in.example() for _ in range(self.buffer_size)
+            self.subcodec_in.example(shared_dicts) for _ in range(self.buffer_size)
         ]
         example_items = jax.tree_map(lambda *s: jnp.stack(s), *example_items_list)
 

@@ -1,2 +1,4 @@
 -e .
 black
+transformers
+faker

@@ -40,13 +40,22 @@ class StructCodec(Codec):
 
     def setup(self):
         self.subcodecs = [subcodec.clone() for subcodec in self.subcodecs_in]
-        self.encoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks, embed_dim=self.embed_dim)
-        self.decoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks, embed_dim=self.embed_dim)
+        self.encoder = Transformer(
+            num_heads=self.n_heads, num_blocks=self.n_blocks, embed_dim=self.embed_dim
+        )
+        self.decoder = Transformer(
+            num_heads=self.n_heads, num_blocks=self.n_blocks, embed_dim=self.embed_dim
+        )
 
-    def encode(self, x: StructObservation) -> Tuple[Embedding, StructContext]:
+    def encode(
+        self, x: StructObservation, shared_dicts
+    ) -> Tuple[Embedding, StructContext]:
         # apply sub-codec encoders to each column independently
         embeddings, subcontexts = zip(
-            *[subcodec_i.encode(x_i) for x_i, subcodec_i in zip(x, self.subcodecs)]
+            *[
+                subcodec_i.encode(x_i, shared_dicts)
+                for x_i, subcodec_i in zip(x, self.subcodecs)
+            ]
         )
 
         # apply encoder transformer to the embeddings
@@ -56,7 +65,7 @@ class StructCodec(Codec):
         return encoded_embeddings[-1], (encoded_embeddings, subcontexts)
 
     def decode(
-        self, conditioning_vector: Embedding, context: StructContext
+        self, conditioning_vector: Embedding, context: StructContext, shared_dicts
     ) -> StructPrediction:
         encoded_embeddings, subcontexts = context
 
@@ -68,7 +77,7 @@ class StructCodec(Codec):
 
         # apply subcodec decoders to each column independently
         sub_predictions = [
-            subcodec_i.decode(conditioning_context_i, subcontext_i)
+            subcodec_i.decode(conditioning_context_i, subcontext_i, shared_dicts)
             for conditioning_context_i, subcontext_i, subcodec_i in zip(
                 conditioning_contexts,
                 subcontexts,
@@ -79,7 +88,7 @@ class StructCodec(Codec):
         return sub_predictions
 
     def sample(
-        self, conditioning_vector: Embedding
+        self, conditioning_vector: Embedding, shared_dicts
     ) -> Tuple[StructObservation, Embedding]:
         samples = []
         embeddings = jnp.zeros(shape=(len(self.subcodecs), self.embed_dim))  # length N
@@ -98,7 +107,7 @@ class StructCodec(Codec):
 
             # sample from the next column
             sample_i, embedding_i = subcodec_i.sample(
-                conditioning_vector=conditioning_vector_i
+                conditioning_vector=conditioning_vector_i, shared_dicts=shared_dicts
             )
 
             samples.append(sample_i)
@@ -107,14 +116,18 @@ class StructCodec(Codec):
         encoded_embeddings = self.encoder(embeddings)
         return samples, encoded_embeddings[-1]
 
-    def loss(self, x: StructObservation, prediction: StructPrediction) -> jnp.ndarray:
+    def loss(
+        self, x: StructObservation, prediction: StructPrediction, shared_dicts
+    ) -> jnp.ndarray:
         losses = [
-            subcodec.loss(x=x_i, prediction=pred_i)
+            subcodec.loss(x=x_i, prediction=pred_i, shared_dicts=shared_dicts)
             for subcodec, x_i, pred_i in zip(self.subcodecs, x, prediction)
         ]
         return jnp.array(losses).sum()
 
-    def example(self) -> StructObservation:
+    def example(self, shared_dicts) -> StructObservation:
         # iterate over self.subcodecs_in instead of self.subcodecs because they only exist after `setup` is done
-        sub_examples = [subcodec.example() for subcodec in self.subcodecs_in]
+        sub_examples = [
+            subcodec.example(shared_dicts) for subcodec in self.subcodecs_in
+        ]
         return list(sub_examples)

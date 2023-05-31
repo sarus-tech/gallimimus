@@ -32,33 +32,39 @@ class CategoricalCodec(Codec):
         )
         self.bias = self.param("bias_decoding", nn.ones, (self.vocab_size,))
 
-    def encode(self, x: CategoricalObservation) -> Tuple[Embedding, CategoricalContext]:
+    def encode(
+        self, x: CategoricalObservation, shared_dicts
+    ) -> Tuple[Embedding, CategoricalContext]:
         assert x.shape == ()
         embedding = self.embedder(inputs=x)
         return embedding, None
 
     def decode(
-        self, conditioning_vector: Embedding, context: CategoricalContext
+        self, conditioning_vector: Embedding, context: CategoricalContext, shared_dicts
     ) -> CategoricalPrediction:
         prediction = self.embedder.attend(query=conditioning_vector) + self.bias
         return prediction
 
     def sample(
-        self, conditioning_vector: Embedding
+        self, conditioning_vector: Embedding, shared_dicts
     ) -> Tuple[CategoricalObservation, Embedding]:
         assert conditioning_vector.shape == (self.embed_dim,)
-        prediction = self.decode(conditioning_vector=conditioning_vector, context=None)
+        prediction = self.decode(
+            conditioning_vector=conditioning_vector,
+            context=None,
+            shared_dicts=shared_dicts,
+        )
         rng = self.make_rng(name="sample")
         sample = jax.random.categorical(
             key=rng,
             logits=prediction,
         )
 
-        embedding, _ = self.encode(x=sample)
+        embedding, _ = self.encode(x=sample, shared_dicts=shared_dicts)
         return sample, embedding
 
     def loss(
-        self, x: CategoricalObservation, prediction: CategoricalPrediction
+        self, x: CategoricalObservation, prediction: CategoricalPrediction, shared_dicts
     ) -> jnp.ndarray:
         logits_normalized = jax.nn.log_softmax(x=prediction)
         loss_x = -(
@@ -66,5 +72,5 @@ class CategoricalCodec(Codec):
         ).sum()
         return loss_x
 
-    def example(self):
+    def example(self, shared_dicts):
         return jnp.array(self.vocab_size - 1)

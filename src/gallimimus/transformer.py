@@ -6,6 +6,7 @@ import jax.numpy as jnp
 from transformers import GPT2Config
 from transformers.models.gpt2.modeling_flax_gpt2 import FlaxGPT2BlockCollection
 
+
 class Transformer(nn.Module):
     """Causal Transformer Model."""
 
@@ -15,7 +16,7 @@ class Transformer(nn.Module):
 
     def setup(self) -> None:
         config = GPT2Config(
-            n_head = self.num_heads,
+            n_head=self.num_heads,
             n_layer=self.num_blocks,
             n_embd=self.embed_dim,
         )
@@ -28,15 +29,11 @@ class Transformer(nn.Module):
         # assert inputs.ndim == 2  # (len, embed_dim)
 
         inputs = jax.tree_util.tree_map(
-            lambda arr: jnp.expand_dims(arr, axis=0),
-            inputs
+            lambda arr: jnp.expand_dims(arr, axis=0), inputs
         )
         outputs = self.transformer(
             hidden_states=inputs,
         )[0]
 
-        outputs = jax.tree_util.tree_map(
-            lambda arr: jnp.squeeze(arr, axis=0),
-            outputs
-        )
+        outputs = jax.tree_util.tree_map(lambda arr: jnp.squeeze(arr, axis=0), outputs)
         return outputs
