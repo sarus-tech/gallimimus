@@ -29,9 +29,11 @@ cat_codec = CategoricalCodec(
     vocab_size=max_cat,
 )
 
-shared_cat_codec = SharedCodec(embed_dim=embed_dim, shared_module_name="cat_codec")
 
-model_dict = {"cat_codec": cat_codec}
+shared_cat_codec = SharedCodec(embed_dim=embed_dim, shared_module_name="cat_codec")
+shared_cat_codec2 = SharedCodec(embed_dim=embed_dim, shared_module_name="cat_codec2")
+
+model_dict = {"cat_codec": cat_codec, "cat_codec2": cat_codec}
 
 ### with split lora params
 
@@ -56,7 +58,7 @@ struct_codec2 = StructCodec(
     embed_dim=embed_dim,
     n_heads=8,
     n_blocks=2,
-    subcodecs_in=[shared_cat_codec, shared_cat_codec],
+    subcodecs_in=[shared_cat_codec, shared_cat_codec2],
 )
 
 lora_codec2 = LoraCodec(
@@ -71,7 +73,7 @@ lora_codec2 = LoraCodec(
 
 
 model = MetaLearner(
-    codec_in=lora_codec2,
+    codec_in=struct_codec2,
     model_dict=model_dict,
     params_dict={},
 )

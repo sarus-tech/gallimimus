@@ -28,7 +28,6 @@ shared_model["loss"].apply(params, prediction, x) -> array of shape ()
 class SharedCodec(Codec):
     """TODO
 
-    An observation is TODO
 
     :param embed_dim: size of the embeddings."""
 
