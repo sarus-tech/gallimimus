@@ -7,7 +7,6 @@ from gallimimus.codec import (
     CategoricalCodec,
     ListCodec,
     StructCodec,
-    SharedCodec,
     LoraCodec,
 )
 
@@ -30,16 +29,12 @@ cat_codec = CategoricalCodec(
 )
 
 
-shared_cat_codec = SharedCodec(embed_dim=embed_dim, shared_module_name="cat_codec")
-shared_cat_codec2 = SharedCodec(embed_dim=embed_dim, shared_module_name="cat_codec2")
-
-model_dict = {"cat_codec": cat_codec, "cat_codec2": cat_codec}
 
 ### with split lora params
 
 lora_codec = LoraCodec(
     embed_dim=embed_dim,
-    subcodec_in=shared_cat_codec,
+    subcodec_in="cat_codec",
     lora_module_name="cat_codec",
     filter_fn=lambda path, arr: len(arr.shape) == 2,
     r=2,
@@ -49,31 +44,21 @@ struct_codec = StructCodec(
     embed_dim=embed_dim,
     n_heads=8,
     n_blocks=2,
-    subcodecs_in=[lora_codec, lora_codec],
+    subcodecs_in=["cat_codec", "cat_codec2"],
 )
 
-### with shared lora params
-
-struct_codec2 = StructCodec(
-    embed_dim=embed_dim,
-    n_heads=8,
-    n_blocks=2,
-    subcodecs_in=[shared_cat_codec, shared_cat_codec2],
-)
-
-lora_codec2 = LoraCodec(
-    embed_dim=embed_dim,
-    subcodec_in=struct_codec2,
-    lora_module_name="cat_codec",
-    filter_fn=lambda path, arr: len(arr.shape) == 2,
-    r=2,
-)
 
 ####
 
+model_dict = {
+    "cat_codec": cat_codec,
+    "cat_codec2": cat_codec,
+    "struct_codec": struct_codec,
+}
+
 
 model = MetaLearner(
-    codec_in=struct_codec2,
+    codec_in="struct_codec",
     model_dict=model_dict,
     params_dict={},
 )

@@ -34,12 +34,11 @@ class StructCodec(Codec):
     :param n_blocks: Number of transformer blocks.
     """
 
-    subcodecs_in: List[Codec]
+    subcodecs_in: List[str]
     n_heads: int = 4
     n_blocks: int = 1
 
     def setup(self):
-        self.subcodecs = [subcodec.clone() for subcodec in self.subcodecs_in]
         self.encoder = Transformer(
             num_heads=self.n_heads, num_blocks=self.n_blocks, embed_dim=self.embed_dim
         )
@@ -48,13 +47,13 @@ class StructCodec(Codec):
         )
 
     def encode(
-        self, x: StructObservation, shared_dicts
+        self, x: StructObservation, shared_codecs
     ) -> Tuple[Embedding, StructContext]:
         # apply sub-codec encoders to each column independently
         embeddings, subcontexts = zip(
             *[
-                subcodec_i.encode(x_i, shared_dicts)
-                for x_i, subcodec_i in zip(x, self.subcodecs)
+                shared_codecs.encode(subcodec_i, x_i)
+                for x_i, subcodec_i in zip(x, self.subcodecs_in)
             ]
         )
 
@@ -65,7 +64,7 @@ class StructCodec(Codec):
         return encoded_embeddings[-1], (encoded_embeddings, subcontexts)
 
     def decode(
-        self, conditioning_vector: Embedding, context: StructContext, shared_dicts
+        self, conditioning_vector: Embedding, context: StructContext, shared_codecs
     ) -> StructPrediction:
         encoded_embeddings, subcontexts = context
 
@@ -77,23 +76,28 @@ class StructCodec(Codec):
 
         # apply subcodec decoders to each column independently
         sub_predictions = [
-            subcodec_i.decode(conditioning_context_i, subcontext_i, shared_dicts)
+            shared_codecs.decode(subcodec_i, conditioning_context_i, subcontext_i)
             for conditioning_context_i, subcontext_i, subcodec_i in zip(
                 conditioning_contexts,
                 subcontexts,
-                self.subcodecs,
+                self.subcodecs_in,
             )
         ]
 
         return sub_predictions
 
     def sample(
-        self, conditioning_vector: Embedding, shared_dicts
+        self, conditioning_vector: Embedding, shared_codecs
     ) -> Tuple[StructObservation, Embedding]:
         samples = []
-        embeddings = jnp.zeros(shape=(len(self.subcodecs), self.embed_dim))  # length N
+        embeddings = jnp.zeros(
+            shape=(len(self.subcodecs_in), self.embed_dim)
+        )  # length N
 
-        for i, subcodec_i in enumerate(self.subcodecs):
+        rng = self.make_rng(name="sample")
+        rngs = jax.random.split(rng, len(self.subcodecs_in))
+
+        for i, subcodec_i in enumerate(self.subcodecs_in):
             # encode what was previously sampled
             encoded_embeddings = self.encoder(embeddings)
 
@@ -106,8 +110,8 @@ class StructCodec(Codec):
             ]
 
             # sample from the next column
-            sample_i, embedding_i = subcodec_i.sample(
-                conditioning_vector=conditioning_vector_i, shared_dicts=shared_dicts
+            sample_i, embedding_i = shared_codecs.sample(
+                subcodec_i, conditioning_vector=conditioning_vector_i, rng=rngs[i]
             )
 
             samples.append(sample_i)
@@ -117,17 +121,18 @@ class StructCodec(Codec):
         return samples, encoded_embeddings[-1]
 
     def loss(
-        self, x: StructObservation, prediction: StructPrediction, shared_dicts
+        self, x: StructObservation, prediction: StructPrediction, shared_codecs
     ) -> jnp.ndarray:
         losses = [
-            subcodec.loss(x=x_i, prediction=pred_i, shared_dicts=shared_dicts)
-            for subcodec, x_i, pred_i in zip(self.subcodecs, x, prediction)
+            shared_codecs.loss(model_name=subcodec, x=x_i, prediction=pred_i)
+            for subcodec, x_i, pred_i in zip(self.subcodecs_in, x, prediction)
         ]
         return jnp.array(losses).sum()
 
-    def example(self, shared_dicts) -> StructObservation:
+    def example(self, shared_codecs) -> StructObservation:
         # iterate over self.subcodecs_in instead of self.subcodecs because they only exist after `setup` is done
         sub_examples = [
-            subcodec.example(shared_dicts) for subcodec in self.subcodecs_in
+            shared_codecs.example(subcodec) for subcodec in self.subcodecs_in
         ]
+
         return list(sub_examples)

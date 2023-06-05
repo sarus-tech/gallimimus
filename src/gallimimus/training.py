@@ -108,6 +108,7 @@ def train(
         padded_eval_dataset = eval_dataset
 
     n_eval_batches = len(padded_eval_dataset) // bs
+
     loss_fun = jax.jit(model.batch_loss)
 
     def eval_epoch(params):
@@ -135,7 +136,7 @@ def train(
             delta_t2 = time.perf_counter() - t0
 
             print(
-                f"{i}: loss={loss_epoch:.3f}, eval={eval_loss_epoch:.3f} (t={delta_t:.1f}, t={delta_t2:.1f})"
+                f"{i}: loss={loss_epoch:.3f}, eval={eval_loss_epoch:.3f} (train_t={delta_t:.1f}, eval_t={delta_t2:.1f})"
             )
 
         return params

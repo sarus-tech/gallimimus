@@ -28,31 +28,30 @@ class CategoricalCodec(Codec):
         self.embedder = nn.Embed(
             num_embeddings=self.vocab_size,
             features=self.embed_dim,
-            embedding_init=nn.zeros,
         )
         self.bias = self.param("bias_decoding", nn.ones, (self.vocab_size,))
 
     def encode(
-        self, x: CategoricalObservation, shared_dicts
+        self, x: CategoricalObservation, shared_codecs
     ) -> Tuple[Embedding, CategoricalContext]:
         assert x.shape == ()
         embedding = self.embedder(inputs=x)
         return embedding, None
 
     def decode(
-        self, conditioning_vector: Embedding, context: CategoricalContext, shared_dicts
+        self, conditioning_vector: Embedding, context: CategoricalContext, shared_codecs
     ) -> CategoricalPrediction:
         prediction = self.embedder.attend(query=conditioning_vector) + self.bias
         return prediction
 
     def sample(
-        self, conditioning_vector: Embedding, shared_dicts
+        self, conditioning_vector: Embedding, shared_codecs
     ) -> Tuple[CategoricalObservation, Embedding]:
         assert conditioning_vector.shape == (self.embed_dim,)
         prediction = self.decode(
             conditioning_vector=conditioning_vector,
             context=None,
-            shared_dicts=shared_dicts,
+            shared_codecs=shared_codecs,
         )
         rng = self.make_rng(name="sample")
         sample = jax.random.categorical(
@@ -60,11 +59,14 @@ class CategoricalCodec(Codec):
             logits=prediction,
         )
 
-        embedding, _ = self.encode(x=sample, shared_dicts=shared_dicts)
+        embedding, _ = self.encode(x=sample, shared_codecs=shared_codecs)
         return sample, embedding
 
     def loss(
-        self, x: CategoricalObservation, prediction: CategoricalPrediction, shared_dicts
+        self,
+        x: CategoricalObservation,
+        prediction: CategoricalPrediction,
+        shared_codecs,
     ) -> jnp.ndarray:
         logits_normalized = jax.nn.log_softmax(x=prediction)
         loss_x = -(
@@ -72,5 +74,5 @@ class CategoricalCodec(Codec):
         ).sum()
         return loss_x
 
-    def example(self, shared_dicts):
+    def example(self, shared_codecs):
         return jnp.array(self.vocab_size - 1)

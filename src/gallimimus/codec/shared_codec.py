@@ -1,106 +1,156 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import jax
 
 import jax.numpy as jnp
-import flax.linen as nn
 
 from typing import Tuple, Any
 
-from gallimimus.codec.abstract_codec import Codec, Embedding
 
-CategoricalObservation = jax.Array  # of shape () and dtype int
-CategoricalContext = None
-CategoricalPrediction = jax.Array  # un-normalized logits of shape (vocab_size,)
+Observation = Any  # of shape () and dtype int
+Context = Any
+Prediction = Any  # un-normalized logits of shape (vocab_size,)
 
-
-"""
-shared_dicts = model_dict, params_dict
-shared_model = model_dict[shared_module_name]
-
-shared_model["encode"].apply(params, x) -> embedding
-shared_model["decode"].apply(params, v) -> prediction
-shared_model["sample"].apply(params, v, rng) -> sample
-shared_model["loss"].apply(params, prediction, x) -> array of shape ()
-"""
+Embedding = jax.Array
 
 
-class SharedCodec(Codec):
-    """TODO
+@dataclass
+class SharedCodecs:
+    """TODO"""
 
+    shared_models_dict: dict
+    shared_params_dict: dict
 
-    :param embed_dim: size of the embeddings."""
+    def _get_shared_module_fn(self, model_name, method_name, vmapped) -> Any:
+        shared_model = self.shared_models_dict[model_name]
+        shared_params = self.shared_params_dict[model_name]
 
-    shared_module_name: str
-
-    def exec_shared_module(self, method_name, shared_dicts, *args, **kwargs) -> Any:
-        model_dicts, params_dicts = shared_dicts
-        shared_model = model_dicts[self.shared_module_name]
-
-        shared_params = params_dicts[self.shared_module_name]
-        output = shared_model.apply(
+        output_fn = lambda *args, **kwargs: shared_model.apply(
             {"params": shared_params},
             *args,
             **kwargs,
-            shared_dicts=shared_dicts,
+            shared_codecs=self,
             method=method_name,
         )
-        return output
+
+        if vmapped:
+            output_fn = jax.vmap(
+                output_fn,
+                in_axes=0,
+            )
+
+        return output_fn
 
     def encode(
-        self, x: CategoricalObservation, shared_dicts
-    ) -> Tuple[Embedding, CategoricalContext]:
-        assert x.shape == ()
-
-        embedding, context = self.exec_shared_module(
-            x=x,
-            method_name="encode",
-            shared_dicts=shared_dicts,
+        self, model_name, x: Observation, vmapped=False
+    ) -> Tuple[Embedding, Context]:
+        encoding_fn = self._get_shared_module_fn(
+            model_name=model_name, method_name="encode", vmapped=vmapped
         )
 
-        return embedding, context
+        return encoding_fn(x=x)
 
     def decode(
-        self, conditioning_vector: Embedding, context: CategoricalContext, shared_dicts
-    ) -> CategoricalPrediction:
-        prediction = self.exec_shared_module(
+        self,
+        model_name,
+        conditioning_vector: Embedding,
+        context: Context,
+        vmapped=False,
+    ) -> Prediction:
+        decoding_fn = self._get_shared_module_fn(
+            model_name=model_name,
             method_name="decode",
-            shared_dicts=shared_dicts,
+            vmapped=vmapped,
+        )
+
+        return decoding_fn(
             conditioning_vector=conditioning_vector,
             context=context,
         )
 
-        return prediction
-
     def sample(
-        self, conditioning_vector: Embedding, shared_dicts
-    ) -> Tuple[CategoricalObservation, Embedding]:
-        assert conditioning_vector.shape == (self.embed_dim,)
-
-        rng = self.make_rng(name="sample")
-
-        sample, embedding = self.exec_shared_module(
+        self,
+        model_name,
+        conditioning_vector: Embedding,
+        rng,
+        vmapped=False,
+    ) -> Tuple[Observation, Embedding]:
+        sampling_fn = self._get_shared_module_fn(
+            model_name=model_name,
             method_name="sample",
-            shared_dicts=shared_dicts,
+            vmapped=vmapped,
+        )
+
+        return sampling_fn(
             conditioning_vector=conditioning_vector,
             rngs={"sample": rng},
         )
 
-        return sample, embedding
-
     def loss(
-        self, x: CategoricalObservation, prediction: CategoricalPrediction, shared_dicts
+        self,
+        model_name,
+        x: Observation,
+        prediction: Prediction,
+        vmapped=False,
     ) -> jnp.ndarray:
-        loss_x = self.exec_shared_module(
+        loss_fn = self._get_shared_module_fn(
+            model_name=model_name,
             method_name="loss",
-            shared_dicts=shared_dicts,
+            vmapped=vmapped,
+        )
+
+        return loss_fn(
             x=x,
             prediction=prediction,
         )
-        return loss_x
 
-    def example(self, shared_dicts):
-        model_dicts, params_dicts = shared_dicts
-        shared_model = model_dicts[self.shared_module_name]
+    def example(self, model_name):
+        return self.shared_models_dict[model_name].example(shared_codecs=self)
 
-        return shared_model.example(shared_dicts)
+
+class MockSharedCodecs:
+    def __init__(self, embed_dim: int):
+        self.embed_dim = embed_dim
+
+    def encode(
+        self,
+        model_name,
+        x: Observation,
+        vmapped=False,
+    ) -> Tuple[Embedding, Context]:
+        embedding = jnp.zeros((self.embed_dim,))
+        context = None
+        return embedding, context
+
+    def decode(
+        self,
+        model_name,
+        conditioning_vector: Embedding,
+        context: Context,
+        vmapped=False,
+    ) -> Prediction:
+        return None
+
+    def sample(
+        self,
+        model_name,
+        conditioning_vector: Embedding,
+        vmapped=False,
+    ) -> Tuple[Observation, Embedding]:
+        sample = None
+        embedding = jnp.zeros((self.embed_dim,))
+        return sample, embedding
+
+    def loss(
+        self,
+        model_name,
+        x: Observation,
+        prediction: Prediction,
+        vmapped=False,
+    ) -> jnp.ndarray:
+        return jnp.array(0.0)
+
+    def example(self, model_name):
+        return None

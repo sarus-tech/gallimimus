@@ -20,7 +20,7 @@ class Codec(nn.Module, abc.ABC):
     """Size of the embeddings. Should be the same for all the codecs in the tree of codecs."""
 
     @abc.abstractmethod
-    def encode(self, x: Observation, shared_dicts) -> Tuple[Embedding, Context]:
+    def encode(self, x: Observation, shared_codecs) -> Tuple[Embedding, Context]:
         """Encode an observation.
 
         :param shared_dicts:
@@ -33,7 +33,7 @@ class Codec(nn.Module, abc.ABC):
 
     @abc.abstractmethod
     def decode(
-        self, conditioning_vector: Embedding, context: Context, shared_dicts
+        self, conditioning_vector: Embedding, context: Context, shared_codecs
     ) -> Prediction:
         """Turn a ``conditioning_vector`` into a predicted probability distribution,
         using the embeddings in the ``context`` in places where autoregressive sampling would occur.
@@ -47,7 +47,7 @@ class Codec(nn.Module, abc.ABC):
 
     @abc.abstractmethod
     def sample(
-        self, conditioning_vector: Embedding, shared_dicts
+        self, conditioning_vector: Embedding, shared_codecs
     ) -> Tuple[Observation, Embedding]:
         """
         Sample a single observation, as conditioned by the ``conditioning_vector``.
@@ -60,7 +60,7 @@ class Codec(nn.Module, abc.ABC):
 
     @abc.abstractmethod
     def loss(
-        self, x: Observation, prediction: Prediction, shared_dicts
+        self, x: Observation, prediction: Prediction, shared_codecs
     ) -> jnp.ndarray:  # of shape ()
         """Returns the negative log-likelihood of ``x`` in the provided distribution.
 
@@ -71,19 +71,20 @@ class Codec(nn.Module, abc.ABC):
         ...
 
     @abc.abstractmethod
-    def example(self, shared_dicts) -> Observation:
+    def example(self, shared_codecs) -> Observation:
         """Convenience function which provides an example input for the model.
 
         :return: An example observation of the data type expected by the codec."""
         ...
 
-    def init_pass(self):
+    def init_pass(self, mock_shared_codecs):
         # only used to initialize shared codecs
-        shared_dicts = ({}, {})
-        x = self.example(shared_dicts)
-        embedding, context = self.encode(x=x, shared_dicts=shared_dicts)
+        x = self.example(mock_shared_codecs)
+        embedding, context = self.encode(x=x, shared_codecs=mock_shared_codecs)
         prediction = self.decode(
-            conditioning_vector=embedding, context=context, shared_dicts=shared_dicts
+            conditioning_vector=embedding,
+            context=context,
+            shared_codecs=mock_shared_codecs,
         )
-        loss_x = self.loss(x=x, prediction=prediction, shared_dicts=shared_dicts)
+        loss_x = self.loss(x=x, prediction=prediction, shared_codecs=mock_shared_codecs)
         return loss_x
