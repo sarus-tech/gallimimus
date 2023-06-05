@@ -3,17 +3,35 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import jax
+import flax
 
 import jax.numpy as jnp
 
 from typing import Tuple, Any
 
 
-Observation = Any  # of shape () and dtype int
+Observation = Any
 Context = Any
-Prediction = Any  # un-normalized logits of shape (vocab_size,)
+Prediction = Any
 
 Embedding = jax.Array
+
+
+def init_shared_trained_param_dict(rng, model_dict, params_dict, embed_dim):
+    trained_params_dict = {}
+
+    mock_shared_codecs = MockSharedCodecs(embed_dim=embed_dim)
+
+    for path, model in model_dict.items():
+        if path not in params_dict:
+            rng, rng2 = jax.random.split(rng, 2)
+            init_params = model.init(
+                rngs=rng, method=model.init_pass, mock_shared_codecs=mock_shared_codecs
+            )["params"]
+
+            trained_params_dict[path] = init_params
+
+    return flax.core.frozen_dict.freeze(trained_params_dict)
 
 
 @dataclass
