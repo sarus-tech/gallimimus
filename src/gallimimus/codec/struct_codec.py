@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import List, Tuple
+
 import jax
 import jax.numpy as jnp
 
@@ -10,9 +12,8 @@ from gallimimus.codec.abstract_codec import (
     Context,
     Prediction,
 )
+from gallimimus.shared_codecs import SharedCodecs
 from gallimimus.transformer import Transformer
-from typing import List, Tuple
-
 
 # for a Struct with N columns
 StructObservation = List[Observation]  # of length N
@@ -47,7 +48,7 @@ class StructCodec(Codec):
         )
 
     def encode(
-        self, x: StructObservation, shared_codecs
+        self, x: StructObservation, shared_codecs: SharedCodecs
     ) -> Tuple[Embedding, StructContext]:
         # apply sub-codec encoders to each column independently
         embeddings, subcontexts = zip(
@@ -64,7 +65,10 @@ class StructCodec(Codec):
         return encoded_embeddings[-1], (encoded_embeddings, subcontexts)
 
     def decode(
-        self, conditioning_vector: Embedding, context: StructContext, shared_codecs
+        self,
+        conditioning_vector: Embedding,
+        context: StructContext,
+        shared_codecs: SharedCodecs,
     ) -> StructPrediction:
         encoded_embeddings, subcontexts = context
 
@@ -87,7 +91,7 @@ class StructCodec(Codec):
         return sub_predictions
 
     def sample(
-        self, conditioning_vector: Embedding, shared_codecs
+        self, conditioning_vector: Embedding, shared_codecs: SharedCodecs
     ) -> Tuple[StructObservation, Embedding]:
         samples = []
         embeddings = jnp.zeros(
@@ -121,7 +125,10 @@ class StructCodec(Codec):
         return samples, encoded_embeddings[-1]
 
     def loss(
-        self, x: StructObservation, prediction: StructPrediction, shared_codecs
+        self,
+        x: StructObservation,
+        prediction: StructPrediction,
+        shared_codecs: SharedCodecs,
     ) -> jnp.ndarray:
         losses = [
             shared_codecs.loss(model_name=subcodec, x=x_i, prediction=pred_i)
@@ -129,7 +136,7 @@ class StructCodec(Codec):
         ]
         return jnp.array(losses).sum()
 
-    def example(self, shared_codecs) -> StructObservation:
+    def example(self, shared_codecs: SharedCodecs) -> StructObservation:
         # iterate over self.subcodecs_in instead of self.subcodecs because they only exist after `setup` is done
         sub_examples = [
             shared_codecs.example(subcodec) for subcodec in self.subcodecs_in

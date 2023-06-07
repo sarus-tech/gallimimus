@@ -1,16 +1,14 @@
 import jax
 import jax.numpy as jnp
 import optax
+from jax import config
 
 from gallimimus import MetaLearner, TrainingHyperparameters, train
 from gallimimus.codec import (
     CategoricalCodec,
-    ListCodec,
     StructCodec,
     LoraCodec,
 )
-
-from jax import config
 
 config.update("jax_debug_nans", True)
 

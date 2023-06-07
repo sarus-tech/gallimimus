@@ -7,16 +7,14 @@ import flax.traverse_util
 import jax
 import jax.numpy as jnp
 from flax import linen as nn
-
-from gallimimus.codec.shared_codec import SharedCodecs, init_shared_trained_param_dict
-from gallimimus.codec.abstract_codec import Codec, Observation
-
 from flax.core.scope import VariableDict
 from jax.random import PRNGKeyArray
 
+from gallimimus.codec.abstract_codec import Codec, Observation
+from gallimimus.shared_codecs import SharedCodecs, init_shared_trained_param_dict
 
-ModelDict = Dict[str, Codec]
-ParamDict = Dict[str, VariableDict]
+ModelDict = flax.core.FrozenDict[str, Codec]
+ParamDict = flax.core.FrozenDict[str, VariableDict]
 
 
 class UnitMetaLearner(nn.Module):
@@ -41,7 +39,6 @@ class UnitMetaLearner(nn.Module):
             init_shared_trained_param_dict,
             self.model_dict,
             self.params_dict,
-            embed_dim,
         )
 
     def _shared_codecs(self):
@@ -187,7 +184,10 @@ class MetaLearner:
         :return: A tuple containing the average loss of the batch (an array of shape ``()``) and its gradient with respect to the parameters
             (a Pytree of the same shape as ``params``)."""
         vmapped_apply_fun = jax.vmap(self.apply_fun, in_axes=(None, 0))
-        scalar_apply_fun = lambda params, xs: vmapped_apply_fun(params, xs).mean()
+
+        def scalar_apply_fun(params, xs):
+            return vmapped_apply_fun(params, xs).mean()
+
         return scalar_apply_fun(params, xs)
 
     def loss_and_grad(

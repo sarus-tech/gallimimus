@@ -1,17 +1,17 @@
 from __future__ import annotations
-import random
+
 import dataclasses
+import random
 import time
+from typing import List, Any, Optional
 
 import jax
 import jax.numpy as jnp
 import optax
-
-from typing import List, Any, Optional
 from flax.core.scope import VariableDict
 
-from gallimimus.model import MetaLearner
 from gallimimus.codec.abstract_codec import Observation
+from gallimimus.model import MetaLearner
 
 
 def tree_transpose(list_of_trees: List[Any]):
@@ -41,7 +41,7 @@ def train(
     model: MetaLearner,
     params: VariableDict,
     hyperparams: TrainingHyperparameters,
-    optimizer,
+    optimizer: optax.GradientTransformation,
     dataset: List[Observation],  # List of observations
     eval_dataset: Optional[List[Observation]],
     optimizer_seed: int = 0,
@@ -51,7 +51,9 @@ def train(
     :param model: A model to be trained.
     :param params: The flax parameters at initialization.
     :param hyperparams: Configuration for the training.
+    :param optimizer: An Optax optimizer.
     :param dataset: A list of observations to train on.
+    :param eval_dataset: A dataset used for validation.
     :param optimizer_seed: Starting seed for the noise in DP-SGD training.
     :return: The parameters after training the model according to the hyperparameters.
     """

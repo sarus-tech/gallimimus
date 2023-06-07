@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Tuple
+
 import jax
 import jax.numpy as jnp
 from flax import linen as nn
@@ -11,15 +13,13 @@ from gallimimus.codec.abstract_codec import (
     Context,
     Prediction,
 )
-
 from gallimimus.codec.categorical_codec import CategoricalCodec
+from gallimimus.shared_codecs import SharedCodecs
 from gallimimus.transformer import Transformer
 
-from typing import Tuple
-
 # For a ListCodec of buffer_size N:
-ListObservation = Tuple[int, Observation]
-# real length, and stacked Pytrees of sub-observations
+ListObservation = Tuple[jax.Array, Observation]
+# real length (array of shape ()), and stacked Pytrees of sub-observations
 ListContext = Tuple[jax.Array, Context]
 # encoded_embeddings, stacked Pytrees of sub-contexts
 ListPrediction = Tuple[jax.Array, Prediction]
@@ -68,7 +68,7 @@ class ListCodec(Codec):
         )
 
     def encode(
-        self, x: ListObservation, shared_codecs
+        self, x: ListObservation, shared_codecs: SharedCodecs
     ) -> Tuple[Embedding, ListContext]:
         x_len, x_items = x
 
@@ -86,7 +86,10 @@ class ListCodec(Codec):
         return encoded_embeddings[-1], (encoded_embeddings, subcontexts)
 
     def decode(
-        self, conditioning_vector: Embedding, context: ListContext, shared_codecs
+        self,
+        conditioning_vector: Embedding,
+        context: ListContext,
+        shared_codecs: SharedCodecs,
     ) -> ListPrediction:
         encoded_embeddings, subcontexts = context
 
@@ -110,10 +113,10 @@ class ListCodec(Codec):
             self.subcodec_in, conditioning_items, subcontexts, vmapped=True
         )
 
-        return (pred_len, pred_items)
+        return pred_len, pred_items
 
     def sample(
-        self, conditioning_vector: Embedding, shared_codecs
+        self, conditioning_vector: Embedding, shared_codecs: SharedCodecs
     ) -> Tuple[ListObservation, Embedding]:
         # sample the length
         sampled_len, embedding_len = self.len_codec.sample(
@@ -156,7 +159,10 @@ class ListCodec(Codec):
         return (sampled_len, samples), encoded_embeddings[-1]
 
     def loss(
-        self, x: ListObservation, prediction: ListPrediction, shared_codecs
+        self,
+        x: ListObservation,
+        prediction: ListPrediction,
+        shared_codecs: SharedCodecs,
     ) -> jnp.ndarray:
         x_len, x_items = x
         pred_len, pred_items = prediction
@@ -174,7 +180,7 @@ class ListCodec(Codec):
         # TODO what loss do we want for a list? NLL is too restrictive (and badly conditioned for long lists)
         return loss_len + losses_item
 
-    def example(self, shared_codecs):
+    def example(self, shared_codecs: SharedCodecs):
         example_len = jnp.array(self.max_len - 1)
 
         # stack by hand instead of using the vmapped subcodec because it only exists after `setup` is done
@@ -182,4 +188,4 @@ class ListCodec(Codec):
         example_items_list = [example_item for _ in range(self.buffer_size)]
         example_items = jax.tree_map(lambda *s: jnp.stack(s), *example_items_list)
 
-        return (example_len, example_items)
+        return example_len, example_items

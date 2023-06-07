@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import jax
-
-import jax.numpy as jnp
-import flax.linen as nn
-
 from typing import Tuple
 
+import flax.linen as nn
+import jax
+import jax.numpy as jnp
+
 from gallimimus.codec.abstract_codec import Codec, Embedding
+from gallimimus.shared_codecs import SharedCodecs
 
 CategoricalObservation = jax.Array  # of shape () and dtype int
 CategoricalContext = None
@@ -32,20 +32,23 @@ class CategoricalCodec(Codec):
         self.bias = self.param("bias_decoding", nn.ones, (self.vocab_size,))
 
     def encode(
-        self, x: CategoricalObservation, shared_codecs
+        self, x: CategoricalObservation, shared_codecs: SharedCodecs
     ) -> Tuple[Embedding, CategoricalContext]:
         assert x.shape == ()
         embedding = self.embedder(inputs=x)
         return embedding, None
 
     def decode(
-        self, conditioning_vector: Embedding, context: CategoricalContext, shared_codecs
+        self,
+        conditioning_vector: Embedding,
+        context: CategoricalContext,
+        shared_codecs: SharedCodecs,
     ) -> CategoricalPrediction:
         prediction = self.embedder.attend(query=conditioning_vector) + self.bias
         return prediction
 
     def sample(
-        self, conditioning_vector: Embedding, shared_codecs
+        self, conditioning_vector: Embedding, shared_codecs: SharedCodecs
     ) -> Tuple[CategoricalObservation, Embedding]:
         assert conditioning_vector.shape == (self.embed_dim,)
         prediction = self.decode(
@@ -66,7 +69,7 @@ class CategoricalCodec(Codec):
         self,
         x: CategoricalObservation,
         prediction: CategoricalPrediction,
-        shared_codecs,
+        shared_codecs: SharedCodecs,
     ) -> jnp.ndarray:
         logits_normalized = jax.nn.log_softmax(x=prediction)
         loss_x = -(
@@ -74,5 +77,5 @@ class CategoricalCodec(Codec):
         ).sum()
         return loss_x
 
-    def example(self, shared_codecs):
+    def example(self, shared_codecs: SharedCodecs):
         return jnp.array(self.vocab_size - 1)

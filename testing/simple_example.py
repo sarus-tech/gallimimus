@@ -1,18 +1,14 @@
+import flax.linen as nn
 import jax
 import jax.numpy as jnp
-import optax
-import flax
-import flax.linen as nn
-
 import numpy as np
+import optax
+from faker.providers.person.en import Provider
+from jax import config
+from transformers import AutoTokenizer, FlaxAutoModel
 
 from gallimimus import MetaLearner, TrainingHyperparameters, train
 from gallimimus.codec import CategoricalCodec, ListCodec, StructCodec
-
-from transformers import AutoTokenizer, FlaxAutoModel
-from faker.providers.person.en import Provider
-
-from jax import config
 
 config.update("jax_debug_nans", True)
 

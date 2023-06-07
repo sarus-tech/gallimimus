@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-
-import jax
-import flax
-
-import jax.numpy as jnp
-
 from typing import Tuple, Any
 
+import flax
+import jax
+import jax.numpy as jnp
 
 Observation = Any
 Context = Any
@@ -24,7 +21,8 @@ def init_shared_trained_param_dict(rng, model_dict, params_dict):
         if path not in params_dict:
             rng, rng2 = jax.random.split(rng, 2)
             init_params = model.init(
-                rngs=rng, method=model.init_pass,
+                rngs=rng,
+                method=model.init_pass,
             )["params"]
 
             trained_params_dict[path] = init_params

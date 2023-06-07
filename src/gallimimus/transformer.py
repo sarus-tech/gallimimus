@@ -1,8 +1,7 @@
 """Transformer-based language models."""
 import flax.linen as nn
-import jax.tree_util
 import jax.numpy as jnp
-
+import jax.tree_util
 from transformers import GPT2Config
 from transformers.models.gpt2.modeling_flax_gpt2 import FlaxGPT2BlockCollection
 

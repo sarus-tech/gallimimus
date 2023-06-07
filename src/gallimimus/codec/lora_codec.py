@@ -1,20 +1,18 @@
 from __future__ import annotations
 
-import jax
-import flax
-import jax.numpy as jnp
-import flax.linen as nn
+from typing import Tuple
 
-from typing import Tuple, Callable, List
+import flax.linen as nn
+import jax
+import jax.numpy as jnp
+from lora_flax.lora import init_lora_params, lora_combine_params, FilterFunction
 
 from gallimimus.codec.abstract_codec import Codec, Embedding
-from gallimimus.codec.shared_codec import SharedCodecs
+from gallimimus.shared_codecs import SharedCodecs
 
 CategoricalObservation = jax.Array  # of shape () and dtype int
 CategoricalContext = None
 CategoricalPrediction = jax.Array  # un-normalized logits of shape (vocab_size,)
-
-from lora_flax.lora import init_lora_params, lora_combine_params, FilterFunction
 
 
 class LoraCodec(Codec):
@@ -48,7 +46,7 @@ class LoraCodec(Codec):
         return SharedCodecs(model_dict, updated_params_dict)
 
     def encode(
-        self, x: CategoricalObservation, shared_codecs
+        self, x: CategoricalObservation, shared_codecs: SharedCodecs
     ) -> Tuple[Embedding, CategoricalContext]:
         lora_shared_codecs = self.apply_lora(shared_codecs)
         return self.subcodec.encode(x=x, shared_codecs=lora_shared_codecs)
@@ -64,7 +62,7 @@ class LoraCodec(Codec):
         )
 
     def sample(
-        self, conditioning_vector: Embedding, shared_codecs
+        self, conditioning_vector: Embedding, shared_codecs: SharedCodecs
     ) -> Tuple[CategoricalObservation, Embedding]:
         lora_shared_codecs = self.apply_lora(shared_codecs)
         return self.subcodec.sample(
@@ -75,12 +73,12 @@ class LoraCodec(Codec):
         self,
         x: CategoricalObservation,
         prediction: CategoricalPrediction,
-        shared_codecs,
+        shared_codecs: SharedCodecs,
     ) -> jnp.ndarray:
         lora_shared_codecs = self.apply_lora(shared_codecs)
         return self.subcodec.loss(
             x=x, prediction=prediction, shared_dicts=lora_shared_codecs
         )
 
-    def example(self, shared_codecs):
+    def example(self, shared_codecs: SharedCodecs):
         return shared_codecs.example(self.subcodec_in)
