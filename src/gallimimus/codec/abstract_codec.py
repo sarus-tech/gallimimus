@@ -7,6 +7,8 @@ import jax
 from flax import linen as nn
 from jax import numpy as jnp
 
+from gallimimus.codec.shared_codec import MockSharedCodecs
+
 Embedding = jax.Array  # of size `embed_dim`
 Observation = TypeVar("Observation")
 Context = TypeVar("Context")
@@ -77,7 +79,8 @@ class Codec(nn.Module, abc.ABC):
         :return: An example observation of the data type expected by the codec."""
         ...
 
-    def init_pass(self, mock_shared_codecs):
+    def init_pass(self):
+        mock_shared_codecs = MockSharedCodecs(embed_dim=self.embed_dim)
         # only used to initialize shared codecs
         x = self.example(mock_shared_codecs)
         embedding, context = self.encode(x=x, shared_codecs=mock_shared_codecs)

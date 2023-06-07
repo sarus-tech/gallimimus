@@ -17,16 +17,14 @@ Prediction = Any
 Embedding = jax.Array
 
 
-def init_shared_trained_param_dict(rng, model_dict, params_dict, embed_dim):
+def init_shared_trained_param_dict(rng, model_dict, params_dict):
     trained_params_dict = {}
-
-    mock_shared_codecs = MockSharedCodecs(embed_dim=embed_dim)
 
     for path, model in model_dict.items():
         if path not in params_dict:
             rng, rng2 = jax.random.split(rng, 2)
             init_params = model.init(
-                rngs=rng, method=model.init_pass, mock_shared_codecs=mock_shared_codecs
+                rngs=rng, method=model.init_pass,
             )["params"]
 
             trained_params_dict[path] = init_params
@@ -38,20 +36,21 @@ def init_shared_trained_param_dict(rng, model_dict, params_dict, embed_dim):
 class SharedCodecs:
     """TODO"""
 
-    shared_models_dict: dict
-    shared_params_dict: dict
+    shared_models_dict: flax.core.FrozenDict
+    shared_params_dict: flax.core.FrozenDict
 
     def _get_shared_module_fn(self, model_name, method_name, vmapped) -> Any:
         shared_model = self.shared_models_dict[model_name]
         shared_params = self.shared_params_dict[model_name]
 
-        output_fn = lambda *args, **kwargs: shared_model.apply(
-            {"params": shared_params},
-            *args,
-            **kwargs,
-            shared_codecs=self,
-            method=method_name,
-        )
+        def output_fn(*args, **kwargs):
+            return shared_model.apply(
+                {"params": shared_params},
+                *args,
+                **kwargs,
+                shared_codecs=self,
+                method=method_name,
+            )
 
         if vmapped:
             output_fn = jax.vmap(
@@ -128,7 +127,7 @@ class SharedCodecs:
         return self.shared_models_dict[model_name].example(shared_codecs=self)
 
 
-class MockSharedCodecs:
+class MockSharedCodecs(SharedCodecs):
     def __init__(self, embed_dim: int):
         self.embed_dim = embed_dim
 
@@ -155,6 +154,7 @@ class MockSharedCodecs:
         self,
         model_name,
         conditioning_vector: Embedding,
+        rng,
         vmapped=False,
     ) -> Tuple[Observation, Embedding]:
         sample = None

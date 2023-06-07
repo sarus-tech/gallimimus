@@ -81,7 +81,9 @@ model = MetaLearner(
 rng = jax.random.PRNGKey(0)
 
 
-params = model.init(rng=rng)
+init = jax.jit(model.init)
+
+params = init(rng=rng)
 
 
 hyperparams = TrainingHyperparameters(
