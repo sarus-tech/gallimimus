@@ -1,11 +1,10 @@
+import typing as t
 from collections.abc import Mapping
 
-import jax.numpy as jnp
-import jax
 import flax
 import flax.linen as nn
-import typing as t
-
+import jax
+import jax.numpy as jnp
 from flax.core.scope import VariableDict
 from jax.random import KeyArray
 
@@ -106,39 +105,54 @@ def lora_combine_params2(
             res[k] = v
         else:
             if isinstance(v, Mapping):
-                res[k] = lora_combine_params(v, lora_params[k], alpha)
+                res[k] = lora_combine_params2(v, lora_params[k], alpha)
             else:
                 res[k] = lora_combine_vars(v, lora_params[k], alpha)
     return res
 
 
-class LoRA(nn.Module):
-    """Wrapper module enabling `LoRa approximation <https://arxiv.org/abs/2106.09685>`_"""
+def LoRA(
+    target_module: nn.Module,
+    pretrained_params,
+    filter_fn,
+    r: int,
+    methods: t.Dict = {"__call__": []},
+) -> nn.Module:
+    """
+    TODO
+    """
 
-    target_apply_fn: t.Callable
-    """The ``nn.Module.apply`` function of the module LoRA is applied to."""
-    pretrained_params: VariableDict
-    """The pretrained parameters of the model."""
+    class LoRA_module(nn.Module):
+        """Wrapper module enabling `LoRa approximation <https://arxiv.org/abs/2106.09685>`_"""
 
-    filter_fn: FilterFunction
-    """A function of signature ``(param_name: t.List[str], param: jax.Array) -> bool`` deciding if a parameter is finetuned."""
-    r: int
-    """The rank of the LoRA approximation."""
+        def setup(self):
+            """TODO"""
+            self.lora_params = self.param(
+                "lora",
+                init_lora_params,
+                pretrained_params,
+                filter_fn,
+                r,
+            )
 
-    @nn.compact
-    def __call__(self, *args, **kwargs):
-        """Calls the ``target_apply_fn``. The signature is the same as ``target_apply_fn``."""
-        lora_params = self.param(
-            "lora",
-            init_lora_params,
-            self.pretrained_params,
-            self.filter_fn,
-            self.r,
-        )
+    def _get_method_fn(method_name, need_rng):
+        def method_fn(self, *args, **kwargs):
+            summed_params = lora_combine_params(
+                pretrained_params=pretrained_params,
+                lora_params=self.lora_params,
+            )
 
-        summed_params = lora_combine_params(
-            pretrained_params=self.pretrained_params,
-            lora_params=lora_params,
-        )
+            rngs = {rng_name: self.make_rng(rng_name) for rng_name in need_rng}
 
-        return self.target_apply_fn({"params": summed_params}, *args, **kwargs)
+            output = target_module.apply(
+                {"params": summed_params}, *args, **kwargs, rngs=rngs, method=method_name
+            )
+
+            return output
+
+        return method_fn
+
+    for method_name, need_rng in methods.items():
+        setattr(LoRA_module, method_name, _get_method_fn(method_name, need_rng))
+
+    return LoRA_module()

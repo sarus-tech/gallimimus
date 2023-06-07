@@ -5,6 +5,8 @@ listed at https://huggingface.co/docs/transformers/main/en/model_doc/gpt2#resour
 import os
 import pickle
 import time
+import typing
+from dataclasses import dataclass
 
 import datasets
 import jax
@@ -37,6 +39,17 @@ apply_fn = lambda params, input, **kwargs: model(
     **input, params=params["params"], **kwargs
 )
 
+
+@dataclass
+class WrapperModel:
+    model: typing.Any
+
+    def apply(self, params, input, rngs={}, method=None, **kwargs):
+        return self.model(
+    **input, params=params["params"], **kwargs
+)
+
+wrapped_model = WrapperModel(model)
 
 ### definition of the different datasets:
 def make_names(size_train, size_eval):
@@ -126,39 +139,40 @@ def count_params(params):
     param_count = sum(x.size for x in jax.tree_leaves(params))
     return param_count
 
+@dataclass
+class TrainingHyperparams:
+    mode: str = "sgd"
+    batch_size: int = 16
+    num_epochs: int = 10
+    training_seed: int = 0
+    learning_rate: float = 3e-4
+
+    optimizer_seed: int = 1
+    noise_multiplier: float = 1.
+    l2_norm_clip: float = 1e10
+
 ### main training function:
 
-def do_lora_training(filter_fn, lora_rank, save_folder, tokenized_datasets):
+def do_lora_training(filter_fn, lora_rank, save_folder, tokenized_datasets, hyperparams: TrainingHyperparams):
     os.makedirs(save_folder, exist_ok=True)
     print(f"--- saving to {save_folder} ---")
     try:
         t0 = time.perf_counter()
 
+
         lora_bert = LoRA(
-            target_apply_fn=apply_fn,
+            target_module=wrapped_model,
             pretrained_params=model.params,
             filter_fn=filter_fn,
             r=lora_rank,
         )
 
         ### train the LoRA model with the dataset
-        batch_size = 16
-        num_epochs = 10
-        training_seed = 0
-        learning_rate = 3e-4
 
-        num_train_steps = len(tokenized_datasets["train"]) // batch_size * num_epochs
 
-        linear_decay_lr_schedule_fn = optax.linear_schedule(
-            init_value=learning_rate, end_value=0, transition_steps=num_train_steps
-        )
-        adamw = optax.adamw(
-            learning_rate=linear_decay_lr_schedule_fn,
-            b1=0.9,
-            b2=0.98,
-            eps=1e-8,
-            weight_decay=0.01,
-        )
+        num_train_steps = len(tokenized_datasets["train"]) // hyperparams.batch_size * hyperparams.num_epochs
+
+
 
         def data_loader(rng, dataset, batch_size, shuffle=False):
             steps_per_epoch = len(dataset) // batch_size
@@ -181,37 +195,85 @@ def do_lora_training(filter_fn, lora_rank, save_folder, tokenized_datasets):
         init_rng = jax.random.PRNGKey(0)
 
         init_loader = data_loader(
-            init_rng, tokenized_datasets["train"], batch_size, shuffle=True
+            init_rng, tokenized_datasets["train"], hyperparams.batch_size, shuffle=True
         )
 
         init_batch = next(init_loader)
         labels = init_batch.pop("labels")
         lora_param = lora_bert.init(jax.random.PRNGKey(0), init_batch)
 
-        state = train_state.TrainState.create(
-            apply_fn=lora_bert.apply, params=lora_param, tx=adamw
+        print(
+f"""training 
+- {count_params(lora_param)} compared to 
+- {count_params(model.params)} original params"""
         )
+
+        def loss_fn(params, batch, dropout_rng):
+            labels = batch.pop("labels")
+            logits = lora_bert.apply(
+                variables=params, input=batch, dropout_rng=dropout_rng, train=True
+            )[0]
+
+            loss = optax.softmax_cross_entropy(
+                logits[..., :-1, :], jax.nn.one_hot(labels[..., 1:], logits.shape[-1])
+            ).mean()
+            return loss
+
+        grad_fn = jax.value_and_grad(loss_fn)
+
+        if hyperparams.mode == "dpsgd":
+            def grad_fn_dpsgd(params, batch, dropout_rng):
+                vmapped_grad_fn = jax.vmap(grad_fn, in_axes=(None, 0, None))
+                batch = jax.tree_util.tree_map(lambda arr: arr[None, :], batch)
+                losses, grads = vmapped_grad_fn(params, batch, dropout_rng)
+                return losses.mean(), grads
+
+            tx = optax.chain(
+                optax.differentially_private_aggregate(
+                    l2_norm_clip=hyperparams.l2_norm_clip,
+                    noise_multiplier=hyperparams.noise_multiplier,
+                    seed=hyperparams.optimizer_seed,
+                ),
+                optax.sgd(learning_rate=hyperparams.learning_rate),
+            )
+            state = train_state.TrainState.create(
+                apply_fn=grad_fn_dpsgd, params=lora_param, tx=tx
+            )
+
+        else:
+            if hyperparams.mode == "sgd":
+                tx = optax.sgd(
+                    learning_rate=hyperparams.learning_rate,
+                )
+
+            elif hyperparams.mode == "adamw":
+                linear_decay_lr_schedule_fn = optax.linear_schedule(
+                    init_value=hyperparams.learning_rate, end_value=0, transition_steps=num_train_steps
+                )
+                tx = optax.adamw(
+                    learning_rate=linear_decay_lr_schedule_fn,
+                    b1=0.9,
+                    b2=0.98,
+                    eps=1e-8,
+                    weight_decay=0.01,
+                )
+            else:
+                raise ValueError
+
+            state = train_state.TrainState.create(
+                apply_fn=grad_fn, params=lora_param, tx=tx
+            )
 
         @jax.jit
         def train_step(state, batch, dropout_rng):
             dropout_rng, new_dropout_rng = jax.random.split(dropout_rng)
 
-            def loss_fn(params):
-                labels = batch.pop("labels")
-                logits = state.apply_fn(
-                    variables=params, input=batch, dropout_rng=dropout_rng, train=True
-                )[0]
 
-                loss = optax.softmax_cross_entropy(
-                    logits[..., :-1, :], jax.nn.one_hot(labels[..., 1:], logits.shape[-1])
-                ).mean()
-                return loss
 
-            grad_fn = jax.value_and_grad(loss_fn)
-            loss, grad = grad_fn(state.params)
+            loss, grad = state.apply_fn(state.params, batch, dropout_rng)
             new_state = state.apply_gradients(grads=grad)
 
-            metrics = {"loss": loss, "learning_rate": linear_decay_lr_schedule_fn(state.step)}
+            metrics = {"loss": loss}
 
             return new_state, metrics, new_dropout_rng
 
@@ -230,22 +292,22 @@ def do_lora_training(filter_fn, lora_rank, save_folder, tokenized_datasets):
             return metrics
 
 
-        rng = jax.random.PRNGKey(training_seed)
+        rng = jax.random.PRNGKey(hyperparams.training_seed)
         dropout_rngs = rng
 
         eval_file = os.path.join(save_folder, "eval_metric.csv")
         train_file = os.path.join(save_folder, "train_metric.csv")
 
-        for epoch in tqdm(range(1, num_epochs + 1), desc=f"Epoch ...", position=0, leave=True):
+        for epoch in tqdm(range(1, hyperparams.num_epochs + 1), desc=f"Epoch ...", position=0, leave=True):
             rng, input_rng = jax.random.split(rng)
 
             # -- Train --
             train_loader = data_loader(
-                input_rng, tokenized_datasets["train"], batch_size, shuffle=True
+                input_rng, tokenized_datasets["train"], hyperparams.batch_size, shuffle=True
             )
 
             with tqdm(
-                total=len(tokenized_datasets["train"]) // batch_size,
+                total=len(tokenized_datasets["train"]) // hyperparams.batch_size,
                 desc="Training...",
                 leave=False,
             ) as progress_bar_train:
@@ -258,18 +320,18 @@ def do_lora_training(filter_fn, lora_rank, save_folder, tokenized_datasets):
                     progress_bar_train.update(1)
 
                 progress_bar_train.write(
-                    f"Train... ({epoch}/{num_epochs} | Loss: {round(train_metric['loss'].mean(), 3)}, Learning Rate: {round(train_metric['learning_rate'].mean(), 6)})"
+                    f"Train... ({epoch}/{hyperparams.num_epochs} | Loss: {round(train_metric['loss'].mean(), 3)})"
                 )
                 t1 = time.perf_counter() - t0
                 train_metrics_save = {"time": t1, "loss": train_metric["loss"], "epoch": epoch}
                 train_metrics_save = pd.DataFrame.from_records([train_metrics_save])
                 train_metrics_save.to_csv(train_file, index=False, mode='a', header=not os.path.exists(train_file))
             # -- Eval --
-            eval_loader = data_loader(input_rng, tokenized_datasets["validation"], batch_size)
+            eval_loader = data_loader(input_rng, tokenized_datasets["validation"], hyperparams.batch_size)
             eval_metrics = []
 
             with tqdm(
-                total=len(tokenized_datasets["validation"]) // batch_size,
+                total=len(tokenized_datasets["validation"]) // hyperparams.batch_size,
                 desc="Evaluation...",
                 leave=False,
             ) as progress_bar_eval:
@@ -284,7 +346,7 @@ def do_lora_training(filter_fn, lora_rank, save_folder, tokenized_datasets):
                     lambda *leaves: jnp.mean(jnp.array(leaves)), *eval_metrics
                 )
                 progress_bar_eval.write(
-                    f"Eval... ({epoch}/{num_epochs} | Loss: {eval_metrics['loss']} | Perplexity: {eval_metrics['perplexity']})"
+                    f"Eval... ({epoch}/{hyperparams.num_epochs} | Loss: {eval_metrics['loss']} | Perplexity: {eval_metrics['perplexity']})"
                 )
 
                 t2 = time.perf_counter() - t0
@@ -301,29 +363,95 @@ def do_lora_training(filter_fn, lora_rank, save_folder, tokenized_datasets):
 
 
 if __name__ == "__main__":
-    tokenized_datasets = make_names(size_train=10000, size_eval=100)
 
-    filter_fn1 = lambda param_name, params: "kernel" in param_name and "attn" in param_name
 
-    for r in [2, 4, 8]:
-        do_lora_training(
-            filter_fn=filter_fn1,
-            lora_rank = r,
-            save_folder=f"./exp1_{r}",
-            tokenized_datasets = tokenized_datasets,
-        )
+    tokenized_datasets = make_names(size_train=1000, size_eval=100)
+
+    filter_fn1 = lambda param_name, params: "kernel" in param_name
+    # hyperparams = TrainingHyperparams(
+    #     mode="sgd",
+    #     batch_size=16,
+    #     num_epochs=10,
+    #     training_seed=0,
+    #     learning_rate=3e-4,
+    #     optimizer_seed=1,
+    # )
+    #
+    # do_lora_training(
+    #     filter_fn=filter_fn1,
+    #     lora_rank=4,
+    #     save_folder=f"./exp_name/exp_sgd/",
+    #     tokenized_datasets=tokenized_datasets,
+    #     hyperparams=hyperparams,
+    # )
+
+    for l2_norm_clip in [1., 10., 100.]:
+        for noise_multiplier in [0., 0.5, 1., 2.]:
+            hyperparams = TrainingHyperparams(
+                mode="dpsgd",
+                batch_size=16,
+                num_epochs=10,
+                training_seed=0,
+                learning_rate=3e-4,
+
+                optimizer_seed=1,
+                noise_multiplier=noise_multiplier,
+                l2_norm_clip=l2_norm_clip
+            )
+
+            do_lora_training(
+                filter_fn=filter_fn1,
+                lora_rank = 4,
+                save_folder=f"./exp_name/exp_dp_{noise_multiplier}_{l2_norm_clip}/",
+                tokenized_datasets = tokenized_datasets,
+                hyperparams = hyperparams,
+            )
+
 
     ### exp 2
     tokenized_datasets = make_reviews()
 
-    r = 4
+    hyperparams = TrainingHyperparams(
+        mode="sgd",
+        batch_size=16,
+        num_epochs=10,
+        training_seed=0,
+        learning_rate=3e-4,
+        optimizer_seed=1,
+    )
 
     do_lora_training(
         filter_fn=filter_fn1,
-        lora_rank = r,
-        save_folder="./exp2",
+        lora_rank = 4,
+        save_folder="./exp_review/exp_sgd/",
         tokenized_datasets=tokenized_datasets,
+        hyperparams = hyperparams,
     )
+
+
+    for l2_norm_clip in [1., 10., 100.]:
+        for noise_multiplier in [0., 0.5, 1., 2.]:
+            hyperparams = TrainingHyperparams(
+                mode="dpsgd",
+                batch_size=16,
+                num_epochs=10,
+                training_seed=0,
+                learning_rate=3e-4,
+
+                optimizer_seed=1,
+                noise_multiplier=noise_multiplier,
+                l2_norm_clip=l2_norm_clip
+            )
+
+            do_lora_training(
+                filter_fn=filter_fn1,
+                lora_rank=4,
+                save_folder=f"./exp_review/exp_dp_{noise_multiplier}_{l2_norm_clip}/",
+                tokenized_datasets=tokenized_datasets,
+                hyperparams=hyperparams,
+            )
+
+    assert False
 
     ### exp 3
     tokenized_datasets = make_oscar()
@@ -333,5 +461,6 @@ if __name__ == "__main__":
     do_lora_training(
         filter_fn=filter_fn1,
         lora_rank=r,
-        save_folder="./exp3"
+        save_folder="./exp3",
+        hyperparams = hyperparams,
     )

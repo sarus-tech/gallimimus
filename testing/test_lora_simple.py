@@ -1,6 +1,7 @@
 """
 LoRA example with linear regression
 """
+import time
 
 import jax
 import jax.numpy as jnp
@@ -9,7 +10,6 @@ import flax.linen as nn
 import flax
 
 from lora_flax import LoRA
-
 
 ########################
 
@@ -50,13 +50,13 @@ pretrained_params = flax.core.freeze(
 
 
 model = LoRA(
-    target_apply_fn=model_pre.apply,
+    target_module=model_pre,
     pretrained_params=pretrained_params,
     filter_fn=lambda param_name, param: len(param.shape) == 2,
     r=5,
 )
 
-lora_params = model.init({"params": rng}, test_input)
+lora_params = model.init({"params": rng}, test_input, method="__call__")
 
 model.apply(lora_params, test_input)
 
@@ -84,11 +84,14 @@ def update_params(params, learning_rate, grads):
 
 params = lora_params
 for i in range(201):
+    t0 = time.perf_counter()
     # Perform one gradient update.
     loss_val, grads = loss_grad_fn(params, x_samples, y_samples)
     params = update_params(params, learning_rate, grads)
+
+    t1 = time.perf_counter()
     if i % 10 == 0:
         a, b = params["params"]["lora"]["kernel"]
         print(
-            f"Loss step {i:<5}: {loss_val:.4f}, norm = {jnp.linalg.norm(W - a@b):.4f}"
+            f"Loss step {i:<5}: {loss_val:.4f}, norm = {jnp.linalg.norm(W - a@b):.4f}, t={t1-t0}"
         )
