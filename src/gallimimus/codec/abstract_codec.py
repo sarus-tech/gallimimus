@@ -87,8 +87,12 @@ class Codec(nn.Module, abc.ABC):
         :return: An example observation of the data type expected by the codec."""
         ...
 
-    def init_pass(self):
-        mock_shared_codecs = MockSharedCodecs(embed_dim=self.embed_dim)
+    def init_pass(self, model_dict={}, pretrained_params_dict={}):
+        mock_shared_codecs = MockSharedCodecs(
+            shared_models_dict=model_dict,
+            shared_params_dict=pretrained_params_dict,
+            embed_dim=self.embed_dim,
+        )
         # only used to initialize shared codecs
         x = self.example(mock_shared_codecs)
         embedding, context = self.encode(x=x, shared_codecs=mock_shared_codecs)

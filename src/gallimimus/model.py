@@ -26,7 +26,7 @@ class UnitMetaLearner(nn.Module):
 
     codec_in: str
     model_dict: ModelDict
-    params_dict: ParamDict
+    pretrained_params_dict: ParamDict
 
     def setup(self):
         embed_dim = self.model_dict[self.codec_in].embed_dim
@@ -38,11 +38,13 @@ class UnitMetaLearner(nn.Module):
             "trained_params_dict",
             init_shared_trained_param_dict,
             self.model_dict,
-            self.params_dict,
+            self.pretrained_params_dict,
         )
 
     def _shared_codecs(self):
-        params_dict = self.params_dict.copy(add_or_replace=self.trained_params_dict)
+        params_dict = self.pretrained_params_dict.copy(
+            add_or_replace=self.trained_params_dict
+        )
         shared_codecs = SharedCodecs(
             shared_models_dict=self.model_dict, shared_params_dict=params_dict
         )
@@ -116,17 +118,17 @@ class MetaLearner:
         self,
         codec_in: str,
         model_dict: Dict[str, Codec],
-        params_dict: Dict[str, VariableDict],
+        pretrained_params_dict: Dict[str, VariableDict],
     ):
         # the MetaLearner is created by vmapping the methods of the UnitMetaLearner defined above.
         # `unit_metalearner` is a stateful flax module, we convert all the methods we need to pure jax functions before vmapping:
 
         model_dict = flax.core.frozen_dict.freeze(model_dict)
-        params_dict = flax.core.frozen_dict.freeze(params_dict)
+        pretrained_params_dict = flax.core.frozen_dict.freeze(pretrained_params_dict)
         unit_metalearner = UnitMetaLearner(
             codec_in=codec_in,
             model_dict=model_dict,
-            params_dict=params_dict,
+            pretrained_params_dict=pretrained_params_dict,
             parent=None,
         )
 
