@@ -9,6 +9,7 @@ from transformers import FlaxGPT2Model, AutoConfig
 from transformers.models.gpt2.modeling_flax_gpt2 import FlaxGPT2Module
 
 from gallimimus import MetaLearner, TrainingHyperparameters, train
+from gallimimus.codec import LoraCodec
 from gallimimus.codec.text_codec import TextCodec
 
 # jax.config.update("jax_debug_nans", True)
@@ -48,7 +49,7 @@ def make_names(size_train, size_eval):
     return tokenized_list[:size_train], tokenized_list[size_train:]
 
 
-ds, ds_eval = make_names(100, 100)
+ds, ds_eval = make_names(100, 10)
 
 ### Build the model
 """
@@ -90,17 +91,30 @@ for method_name in ["wpe", "wte"]:
 
     setattr(FlaxGPT2Module, f"_{method_name}_attend", make_fn_attend(method_name))
 
+embed_dim = 16
 
 text_codec = TextCodec(
-    embed_dim=16, n_tokens=10, max_length=100, model_name="distilgpt2"
+    embed_dim=embed_dim, n_tokens=10, max_length=100, model_name="distilgpt2"
 )
 
-model_dict = {"text_codec": text_codec, "distilgpt2": gptmodel}
+lora_codec = LoraCodec(
+    embed_dim=embed_dim,
+    subcodec_in="text_codec",
+    lora_module_name="distilgpt2",
+    filter_fn=lambda path, arr: arr.ndim == 2,
+    r=2,
+)
+
+model_dict = {
+    "text_codec": text_codec,
+    "lora_codec": lora_codec,
+    "distilgpt2": gptmodel,
+}
 
 params_dict = {"distilgpt2": gptmodel_params}
 
 model = MetaLearner(
-    codec_in="text_codec",
+    codec_in="lora_codec",
     model_dict=model_dict,
     pretrained_params_dict=params_dict,
 )
