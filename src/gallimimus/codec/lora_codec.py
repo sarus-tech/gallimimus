@@ -5,7 +5,8 @@ from typing import Tuple
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
-from lora_flax import LoRA, FilterFunction
+from lora_flax import FilterFunction
+from lora_flax.lora import init_lora_params, lora_combine_params
 
 from gallimimus.codec.abstract_codec import Codec, Embedding
 from gallimimus.shared_codecs import SharedCodecs
@@ -38,34 +39,43 @@ class LoraCodec(Codec):
             )
         pretrained_params = params_dict[self.lora_module_name]
 
-        lora_codec = LoRA(
-            target_module=model_dict[self.lora_module_name],
-            pretrained_params=pretrained_params,
-            filter_fn=self.filter_fn,
-            r=self.r,
-            methods={
-                "encode": [],
-                "decode": [],
-                "loss": [],
-                "sample": ["sample"],
-                "init_pass": [],
-            },
-        )
-
-        def init_fn(rngs):
-            return lora_codec.init(rngs, model_dict, params_dict, method="init_pass")[
-                "params"
-            ]
-
         lora_params = self.param(
-            "lora_params",
-            init_fn,
+            "lora_params", init_lora_params, pretrained_params, self.filter_fn, self.r
         )
+        
+        summed_params = lora_combine_params(
+            pretrained_params=pretrained_params,
+            lora_params=lora_params,
+        )
+        
+        ## TODO If we want to only use the parent LoRA module and not internal functions:
+        # lora_codec = LoRA(
+        #     target_module=model_dict[self.lora_module_name],
+        #     pretrained_params=pretrained_params,
+        #     filter_fn=self.filter_fn,
+        #     r=self.r,
+        #     methods={
+        #         "encode": [],
+        #         "decode": [],
+        #         "loss": [],
+        #         "sample": ["sample"],
+        #         "init_pass": [],
+        #     },
+        # )
 
-        return shared_codecs.update(
+        # def init_fn(rngs):
+        #     return lora_codec.init(rngs, model_dict, params_dict, method="init_pass")[
+        #         "params"
+        #     ]
+        # 
+        # lora_params = self.param(
+        #     "lora_params",
+        #     init_fn,
+        # )
+
+        return shared_codecs.update_params(
             model_name=self.lora_module_name,
-            model=lora_codec,
-            params=lora_params,
+            params=summed_params,
         )
 
     def encode(

@@ -60,8 +60,8 @@ class SharedCodecs:
 
         return output_fn
 
-    def update(self, model_name, model, params):
-        model_dict = self.shared_models_dict.copy(add_or_replace={model_name: model})
+    def update_params(self, model_name, params):
+        model_dict = self.shared_models_dict
         params_dict = self.shared_params_dict.copy(add_or_replace={model_name: params})
         return SharedCodecs(model_dict, params_dict)
 
@@ -180,5 +180,5 @@ class MockSharedCodecs:
     def example(self, model_name):
         return None
 
-    def update(self, model_name, model, params):
+    def update_params(self, model_name, params):
         return self
