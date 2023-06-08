@@ -64,11 +64,7 @@ struct_codec = StructCodec(
     subcodecs_in=["mus_codec", "l_codec"],
 )
 
-model_dict = {
-    "mus_codec": mus_codec,
-    "l_codec": l_codec,
-    "struct_codec": struct_codec
-}
+model_dict = {"mus_codec": mus_codec, "l_codec": l_codec, "struct_codec": struct_codec}
 
 model = MetaLearner(
     codec_in="struct_codec",
@@ -88,7 +84,6 @@ params = init(rng=rng)
 hyperparams = TrainingHyperparameters(
     num_epochs=100,
     batch_size=1000,
-
     dp=False,
     noise_multiplier=0.3,
     l2_norm_clip=1.0,

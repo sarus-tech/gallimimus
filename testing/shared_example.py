@@ -26,10 +26,9 @@ cat_codec = CategoricalCodec(
     vocab_size=max_cat,
 )
 
-cat_codec_params = cat_codec.init(
-    rngs = jax.random.PRNGKey(0),
-    method = "init_pass"
-)["params"]
+cat_codec_params = cat_codec.init(rngs=jax.random.PRNGKey(0), method="init_pass")[
+    "params"
+]
 
 
 ### with split lora params
@@ -58,9 +57,7 @@ model_dict = {
     "struct_codec": struct_codec,
 }
 
-pretrained_params_dict = {
-    "cat_codec": cat_codec_params
-}
+pretrained_params_dict = {"cat_codec": cat_codec_params}
 
 model = MetaLearner(
     codec_in="struct_codec",

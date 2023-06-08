@@ -28,10 +28,7 @@ class LoraCodec(Codec):
 
     @nn.compact
     def apply_lora(self, shared_codecs: SharedCodecs):
-        model_dict, params_dict = (
-            shared_codecs.shared_models_dict,
-            shared_codecs.shared_params_dict,
-        )
+        params_dict = shared_codecs.shared_params_dict,
 
         if self.lora_module_name not in params_dict:
             raise KeyError(
@@ -42,12 +39,12 @@ class LoraCodec(Codec):
         lora_params = self.param(
             "lora_params", init_lora_params, pretrained_params, self.filter_fn, self.r
         )
-        
+
         summed_params = lora_combine_params(
             pretrained_params=pretrained_params,
             lora_params=lora_params,
         )
-        
+
         ## TODO If we want to only use the parent LoRA module and not internal functions:
         # lora_codec = LoRA(
         #     target_module=model_dict[self.lora_module_name],
@@ -67,7 +64,7 @@ class LoraCodec(Codec):
         #     return lora_codec.init(rngs, model_dict, params_dict, method="init_pass")[
         #         "params"
         #     ]
-        # 
+        #
         # lora_params = self.param(
         #     "lora_params",
         #     init_fn,

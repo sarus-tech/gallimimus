@@ -25,6 +25,7 @@ apply_fn = lambda params, input, **kwargs: model(
 embed_dim = 8
 N = 10000
 
+
 def make_names(size_train, size_eval):
     first_names = list(set(Provider.first_names))
     last_names = list(set(Provider.last_names))
@@ -32,9 +33,12 @@ def make_names(size_train, size_eval):
     first_names_r = np.random.choice(first_names, size=size_train + size_eval)
     last_names_r = np.random.choice(last_names, size=size_train + size_eval)
 
-    names = [ f"{first_name} {last_name}" for first_name, last_name in zip(first_names_r, last_names_r)]
+    names = [
+        f"{first_name} {last_name}"
+        for first_name, last_name in zip(first_names_r, last_names_r)
+    ]
 
-    tokenized_list = [ tokenizer(v, padding='longest') for v in names]
+    tokenized_list = [tokenizer(v, padding="longest") for v in names]
 
     return tokenized_list
 
@@ -116,7 +120,6 @@ params = model.init(rng=rng)
 hyperparams = TrainingHyperparameters(
     num_epochs=100,
     batch_size=1000,
-
     dp=False,
     noise_multiplier=0.3,
     l2_norm_clip=1.0,
