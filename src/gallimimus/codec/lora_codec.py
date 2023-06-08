@@ -28,7 +28,7 @@ class LoraCodec(Codec):
 
     @nn.compact
     def apply_lora(self, shared_codecs: SharedCodecs):
-        params_dict = (shared_codecs.shared_params_dict,)
+        params_dict = shared_codecs.shared_params_dict
 
         if self.lora_module_name not in params_dict:
             raise KeyError(
@@ -45,31 +45,6 @@ class LoraCodec(Codec):
             lora_params=lora_params,
         )
 
-        ## TODO If we want to only use the parent LoRA module and not internal functions:
-        # lora_codec = LoRA(
-        #     target_module=model_dict[self.lora_module_name],
-        #     pretrained_params=pretrained_params,
-        #     filter_fn=self.filter_fn,
-        #     r=self.r,
-        #     methods={
-        #         "encode": [],
-        #         "decode": [],
-        #         "loss": [],
-        #         "sample": ["sample"],
-        #         "init_pass": [],
-        #     },
-        # )
-
-        # def init_fn(rngs):
-        #     return lora_codec.init(rngs, model_dict, params_dict, method="init_pass")[
-        #         "params"
-        #     ]
-        #
-        # lora_params = self.param(
-        #     "lora_params",
-        #     init_fn,
-        # )
-
         return shared_codecs.update_params(
             model_name=self.lora_module_name,
             params=summed_params,
@@ -79,14 +54,14 @@ class LoraCodec(Codec):
         self, x: CategoricalObservation, shared_codecs: SharedCodecs
     ) -> Tuple[Embedding, CategoricalContext]:
         lora_shared_codecs = self.apply_lora(shared_codecs)
-        return lora_shared_codecs.encode(model_name=self.lora_module_name, x=x)
+        return lora_shared_codecs.encode(model_name=self.subcodec_in, x=x)
 
     def decode(
         self, conditioning_vector: Embedding, context: CategoricalContext, shared_codecs
     ) -> CategoricalPrediction:
         lora_shared_codecs = self.apply_lora(shared_codecs)
         return lora_shared_codecs.decode(
-            model_name=self.lora_module_name,
+            model_name=self.subcodec_in,
             conditioning_vector=conditioning_vector,
             context=context,
         )
@@ -98,7 +73,7 @@ class LoraCodec(Codec):
         rng = self.make_rng(name="sample")
 
         return lora_shared_codecs.sample(
-            model_name=self.lora_module_name,
+            model_name=self.subcodec_in,
             conditioning_vector=conditioning_vector,
             rng=rng,
         )
@@ -111,7 +86,7 @@ class LoraCodec(Codec):
     ) -> jnp.ndarray:
         lora_shared_codecs = self.apply_lora(shared_codecs)
         return lora_shared_codecs.loss(
-            model_name=self.lora_module_name, x=x, prediction=prediction
+            model_name=self.subcodec_in, x=x, prediction=prediction
         )
 
     def example(self, shared_codecs: SharedCodecs):
