@@ -8,30 +8,25 @@ import jax.numpy as jnp
 import jax.random
 import optax
 from jax import lax
-from transformers import AutoTokenizer
 
 from gallimimus.codec.abstract_codec import Codec, Embedding
 from gallimimus.shared_codecs import SharedCodecs
 
-GPTObservation = Dict  # of shape TODO and dtype TODO
+GPTObservation = Dict[
+    str, jax.Array
+]  # Output from the tokenizer. The arrays have same length and ndim = 1.
 GPTContext = Any  # TODO
 GPTPrediction = jax.Array  # un-normalized logits of shape (TODO, N_tokens,)
 
 
 class TextCodec(Codec):
-    """Codec for categorical data"""
+    """Codec for textual data"""
 
     n_tokens: int
     """number of tokens modeled by the context"""
     max_length: int
 
     model_name: str
-
-    def __post_init__(self) -> None:
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        self.tokenizer.pad_token = self.tokenizer.eos_token
-
-        super().__post_init__()
 
     def setup(self):
         # config = AutoConfig.from_pretrained("gpt2")
@@ -40,7 +35,7 @@ class TextCodec(Codec):
         #
         # self.gpt2_model = FlaxAutoModel.from_pretrained(self.model_name)
 
-        self.bos_token_id = self.tokenizer.bos_token_id
+        self.bos_token_id = 50256  # bos of huggingface english tokenizer
 
         self.context_projection = nn.Dense(
             self.n_tokens * 768
@@ -275,9 +270,12 @@ class TextCodec(Codec):
         return loss
 
     def example(self, shared_codecs: SharedCodecs) -> GPTObservation:
-        tokens = self.tokenizer("example", padding="longest")
-        tokens = {k: jnp.array(v) for k, v in tokens.items()}
-        tokens["position_ids"] = jnp.arange(len(tokens["input_ids"]))
+        ex = jnp.ones((100,), dtype=int)
+        tokens = {
+            "input_ids": ex,
+            "attention_mask": ex,
+            "position_ids": ex,
+        }
         return tokens
 
 
