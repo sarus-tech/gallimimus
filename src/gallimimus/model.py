@@ -75,9 +75,11 @@ class UnitMetaLearner(nn.Module):
         )
 
         # then we can evaluate P(x) = pred1(x1) x pred2(x2) x ...
-        loss_x = shared_codecs.loss(
+        loss_tree_x = shared_codecs.loss(
             model_name=self.codec_in, x=x, prediction=prediction
         )
+        loss_x = jnp.array(jax.tree_util.tree_flatten(loss_tree_x)[0]).mean()
+
         return loss_x
 
     def sample(self):
@@ -175,6 +177,7 @@ class MetaLearner:
         samples, embeddings = vmapped_sample_fun(params, rngs)
         return samples
 
+    
     def batch_loss(
         self, params: VariableDict, xs: Observation
     ) -> Tuple[jnp.ndarray, Any]:
@@ -186,12 +189,10 @@ class MetaLearner:
         :return: A tuple containing the average loss of the batch (an array of shape ``()``) and its gradient with respect to the parameters
             (a Pytree of the same shape as ``params``)."""
         vmapped_apply_fun = jax.vmap(self.apply_fun, in_axes=(None, 0))
-
-        def scalar_apply_fun(params, xs):
-            return vmapped_apply_fun(params, xs).mean()
-
-        return scalar_apply_fun(params, xs)
-
+        loss_batch = vmapped_apply_fun(params, xs)
+        loss = loss_batch.mean()
+        return loss
+    
     def loss_and_grad(
         self, params: VariableDict, xs: Observation
     ) -> Tuple[jnp.ndarray, Any]:
