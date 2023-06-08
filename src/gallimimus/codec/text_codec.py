@@ -83,12 +83,16 @@ class TextCodec(Codec):
         position_ids += jnp.full_like(position_ids, self.n_tokens)
         # compute embeddings for intermediate contexts
 
-        pos_emb = gpt2_model.wpe.apply(
-            variables={"params": gpt2_params["wpe"]}, inputs=position_ids.astype("i4")
+        pos_emb = gpt2_model.apply(
+            variables={"params": gpt2_params},
+            inputs=position_ids.astype("i4"),
+            method="_wpe",
         )
 
-        tok_emb = gpt2_model.wte.apply(
-            variables={"params": gpt2_params["wte"]}, inputs=input_ids.astype("i4")
+        tok_emb = gpt2_model.apply(
+            variables={"params": gpt2_params},
+            inputs=input_ids.astype("i4"),
+            method="_wte",
         )
 
         intermediate_embeddings = pos_emb + tok_emb
@@ -126,16 +130,19 @@ class TextCodec(Codec):
             axis=-1,
         )
         # compute transformer_blocks+layer_norm+head to get logits
-        hidden_states = gpt2_model.h.apply(
-            {"params": gpt2_params["h"]}, hidden_states, attention_mask
+        hidden_states = gpt2_model.apply(
+            {"params": gpt2_params},
+            hidden_states=hidden_states,
+            attention_mask=attention_mask,
+            method="_h",
         )[0]
 
-        hidden_states = gpt2_model.ln_f.apply(
-            {"params": gpt2_params["ln_f"]}, hidden_states
+        hidden_states = gpt2_model.apply(
+            {"params": gpt2_params}, x=hidden_states, method="_ln_f"
         )
 
-        predictions = gpt2_model.wte.apply(
-            {"params": gpt2_params["wte"]}, hidden_states, method="attend"
+        predictions = gpt2_model.apply(
+            {"params": gpt2_params}, query=hidden_states, method="_wte_attend"
         )
 
         return predictions[0, self.n_tokens - 1 : -1, :]
@@ -156,16 +163,19 @@ class TextCodec(Codec):
             switch_to_zero_attention = carry.switch_to_zero_attention
 
             # Compute logits
-            hidden_states = gpt2_model.h.apply(
-                {"params": gpt2_params["h"]}, embeddings[None, :], attention_mask
+            hidden_states = gpt2_model.apply(
+                {"params": gpt2_params},
+                hidden_states=embeddings[None, :],
+                attention_mask=attention_mask,
+                method="_h",
             )[0]
 
-            hidden_states = gpt2_model.ln_f.apply(
-                {"params": gpt2_params["ln_f"]}, hidden_states
+            hidden_states = gpt2_model.apply(
+                {"params": gpt2_params}, x=hidden_states, method="_ln_f"
             )
 
-            predictions = gpt2_model.wte.apply(
-                {"params": gpt2_params["wte"]}, hidden_states, method="attend"
+            predictions = gpt2_model.apply(
+                {"params": gpt2_params}, query=hidden_states, method="_wte_attend"
             )
 
             logits = predictions[0].at[curr_len - 1].get()
@@ -175,10 +185,12 @@ class TextCodec(Codec):
             next_sequences = lax.dynamic_update_slice(sequences, next_token, ())
             # Update embeddings
             position_id_next_token = jnp.array(curr_len)
-            pos_emb = gpt2_model.wpe.apply(
-                {"params": gpt2_params["wpe"]}, position_id_next_token
+            pos_emb = gpt2_model.apply(
+                {"params": gpt2_params}, inputs=position_id_next_token, method="_wpe"
             )
-            tok_emb = gpt2_model.wte.apply({"params": gpt2_params["wte"]}, next_token)
+            tok_emb = gpt2_model.apply(
+                {"params": gpt2_params}, inputs=next_token, method="_wte"
+            )
             embedding_next_token = pos_emb + tok_emb
 
             embeddings = embeddings.at[curr_len].set(embedding_next_token)
@@ -227,16 +239,17 @@ class TextCodec(Codec):
             attention_mask=attention_mask,
             switch_to_zero_attention=1,
         )
-        carry, samples = self._sample_gpt2(init_carry, init_sequence)
+        carry, samples = _sample_gpt2(self, init_carry, init_sequence)
 
         # recompute for last embedding
-        hidden_states = gpt2_model.h.apply(
-            {"params": gpt2_params["h"]},
-            carry.running_embeddings[None, :],
-            carry.attention_mask,
+        hidden_states = gpt2_model.apply(
+            {"params": gpt2_params},
+            hidden_states=carry.running_embeddings[None, :],
+            attention_mask=carry.attention_mask,
+            method="_h",
         )[0]
-        hidden_states = gpt2_model.ln_f.apply(
-            {"params": gpt2_params["ln_f"]}, hidden_states
+        hidden_states = gpt2_model.apply(
+            {"params": gpt2_params}, x=hidden_states, method="_ln_f"
         )[0]
 
         vector = self.cross_attention(

@@ -28,7 +28,7 @@ class LoraCodec(Codec):
 
     @nn.compact
     def apply_lora(self, shared_codecs: SharedCodecs):
-        params_dict = shared_codecs.shared_params_dict,
+        params_dict = (shared_codecs.shared_params_dict,)
 
         if self.lora_module_name not in params_dict:
             raise KeyError(

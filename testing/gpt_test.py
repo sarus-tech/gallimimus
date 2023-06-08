@@ -11,14 +11,12 @@ from transformers.models.gpt2.modeling_flax_gpt2 import FlaxGPT2Module
 from gallimimus import MetaLearner, TrainingHyperparameters, train
 from gallimimus.codec.text_codec import TextCodec
 
-# config = AutoConfig.from_pretrained("gpt2")
-#
-# # model = FlaxGPT2LMHeadModel.from_config(config)
+# jax.config.update("jax_debug_nans", True)
 
+
+### Make the dataset
 tokenizer = AutoTokenizer.from_pretrained("distilgpt2")
 tokenizer.pad_token = tokenizer.eos_token
-
-# jax.config.update("jax_debug_nans", True)
 
 
 def make_names(size_train, size_eval):
@@ -52,26 +50,46 @@ def make_names(size_train, size_eval):
 
 ds, ds_eval = make_names(100, 100)
 
+### Build the model
+"""
+Building the GPT2 model
 
-######
-config_gpt2, model_kwargs = FlaxGPT2Model.config_class.from_pretrained(
-    "distilgpt2",
-    return_unused_kwargs=True,
-    force_download=False,
-    resume_download=False,
-    local_files_only=False,
-    _from_auto=False,
-)
-model_kwargs["dtype"] = jnp.float32
-
-gpt2_model = FlaxGPT2Module(config_gpt2, **model_kwargs)
-
-#######
-
-
+Warning! Monkeypatched to expose internal methods
+"""
 gpt2_model_config = AutoConfig.from_pretrained("distilgpt2")
 gptmodel_params = FlaxGPT2Model(gpt2_model_config).params
 gptmodel = FlaxGPT2Module(gpt2_model_config)
+
+
+def make_fn(method_name):
+    def fn(self, *args, **kwargs):
+        return getattr(self, method_name)(*args, **kwargs)
+
+    return fn
+
+
+for method_name in ["wpe", "wte", "h", "ln_f", "wpe_attend", "wte_attend"]:
+
+    def fn(self, *args, **kwargs):
+        return getattr(self, method_name)(*args, **kwargs)
+
+    setattr(FlaxGPT2Module, f"_{method_name}", make_fn(method_name))
+
+
+def make_fn_attend(method_name):
+    def fn(self, *args, **kwargs):
+        return getattr(self, method_name).attend(*args, **kwargs)
+
+    return fn
+
+
+for method_name in ["wpe", "wte"]:
+
+    def fn(self, *args, **kwargs):
+        return getattr(self, method_name).attend(*args, **kwargs)
+
+    setattr(FlaxGPT2Module, f"_{method_name}_attend", make_fn_attend(method_name))
+
 
 text_codec = TextCodec(
     embed_dim=16, n_tokens=10, max_length=100, model_name="distilgpt2"
@@ -80,13 +98,14 @@ text_codec = TextCodec(
 model_dict = {"text_codec": text_codec, "distilgpt2": gptmodel}
 
 params_dict = {"distilgpt2": gptmodel_params}
+
 model = MetaLearner(
     codec_in="text_codec",
     model_dict=model_dict,
     pretrained_params_dict=params_dict,
 )
 
-
+### Customize the training and train:
 rng = jax.random.PRNGKey(0)
 params = jax.jit(model.init)(rng=rng)
 
@@ -97,7 +116,6 @@ hyperparams = TrainingHyperparameters(
     noise_multiplier=0.3,
     l2_norm_clip=1.0,
 )
-
 
 optimizer = optax.sgd(
     learning_rate=1e-1,
@@ -111,6 +129,7 @@ trained_params = train(
     eval_dataset=ds_eval,
 )
 
-s = model.sample(trained_params, rng=jax.random.PRNGKey(0), size=10)
+### Sample from the trained model:
+s = model.sample(trained_params, rng=jax.random.PRNGKey(0), size=2)
 
 print(s)
