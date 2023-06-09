@@ -2,16 +2,11 @@ import logging
 
 import jax
 import optax
-
-from sarus_synthetic_data.jax_model.model import MetaLearner
-from sarus_synthetic_data.jax_model.training.configs import (
+from gallimimus.training.configs import (
     CheckpointConfig,
     TrainingConfig,
 )
-from sarus_synthetic_data.jax_model.training.optimizer import (
-    save_optimizer_state,
-)
-from sarus_synthetic_data.jax_model.typing import ModelParams
+
 
 logger = logging.getLogger(__name__)
 

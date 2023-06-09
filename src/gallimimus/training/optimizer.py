@@ -29,7 +29,7 @@ class OptimizerConfig:
         metadata={"help": "Clipping norm for per_sample gradient"},
     )
     noise_multiplier: float = field(
-        default=None, metadata={"help": "Noise std to add at each iteration"}
+        default=0., metadata={"help": "Noise std to add at each iteration"}
     )
     optim: str = field(
         default="adam",

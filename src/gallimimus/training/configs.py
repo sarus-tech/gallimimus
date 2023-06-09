@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from gallimimus.scr.training.optimizer import OptimizerConfig
+from gallimimus.training.optimizer import OptimizerConfig
 
 
 @dataclass
