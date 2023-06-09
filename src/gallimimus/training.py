@@ -77,10 +77,10 @@ def train(
     # define and compile the update step:
     @jax.jit
     def train_step(params, opt_state, inputs):
-        loss, grads = apply_fn(params, inputs)
+        loss, grads, loss_tree = apply_fn(params, inputs)
         updates, opt_state = tx.update(grads, opt_state, params=params)
         params = optax.apply_updates(params, updates)
-        return params, opt_state, loss
+        return params, opt_state, loss, loss_tree
 
     # training loop
     bs = hyperparams.batch_size
@@ -97,7 +97,9 @@ def train(
             batch_list = dataset[j * bs : (j + 1) * bs]
             batch = tree_transpose(batch_list)
 
-            params, opt_state, loss_val = train_step(params, opt_state, batch)
+            params, opt_state, loss_val, loss_tree = train_step(
+                params, opt_state, batch
+            )
             losses.append(loss_val)
 
         return params, opt_state, losses
@@ -119,7 +121,7 @@ def train(
             batch_list = eval_dataset[j * bs : (j + 1) * bs]
             batch = tree_transpose(batch_list)
 
-            loss = loss_fun(params, batch)
+            loss, loss_tree = loss_fun(params, batch)
             losses.append(loss)
 
         loss_epoch = float(jnp.mean(jnp.array(losses)[: len(eval_dataset)]))
