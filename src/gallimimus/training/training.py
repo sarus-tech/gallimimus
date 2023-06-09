@@ -5,6 +5,7 @@ import dataclasses
 import jax
 import jax.numpy as jnp
 import optax
+from flax.metrics.tensorboard import SummaryWriter
 
 import typing
 from flax.core.scope import VariableDict
@@ -32,6 +33,7 @@ def train(
     model: MetaLearner,
     model_params: VariableDict,
     dataset: typing.Iterator[typing.List[Observation]],
+    eval_set:typing.Iterator[typing.List[Observation]],
     training_config: TrainingConfig,
 ) -> typing.Tuple[VariableDict,VariableDict,VariableDict]:
     """Train the model.
@@ -51,6 +53,7 @@ def train(
     #TODO: Allow loading existing optim state
     opt_state = standard_optimizer.init(model_params)
     dp_state = dp_optimizer.init(model_params)
+    summary_writer=SummaryWriter(training_config.check_point_config.tensorboard_dir)
 
     # define and compile the update step:
     def standard_train_step(params:VariableDict, opt_state,dp_state, inputs)->typing.Tuple:
@@ -76,7 +79,9 @@ def train(
     else:
         # sgd takes the regular batch gradients
         train_step = jax.jit(standard_train_step)
-
+    
+    loss_func=jax.jit(model.batch_loss)
+    
     loss_accumulation = []
     logged_losses = []
     step_with_updates=1
@@ -98,10 +103,18 @@ def train(
             _log_step_training_info(step=step_with_updates, loss=loss_to_log)
             logged_losses.append(loss_to_log)
             loss_accumulation = []
+            summary_writer.scalar('train_loss',loss_to_log,step=step_with_updates)
         if step_with_updates % training_config.check_point_config.save_every_steps == 0:
             train_state=TrainState(model_params,opt_state,dp_state)
             mngr.save(step_with_updates, train_state)
 
+        if training_config.eval_every_step is not None and step_with_updates%training_config.eval_every_step == 0:
+            eval_losses=[]
+            for eval_batch in eval_set():
+                eval_losses.append(loss_func(model_params,eval_batch,rng))
+            
+            _log_step_training_info(step=step_with_updates, loss=sum(eval_losses) / len(eval_losses),is_training=False)
+            summary_writer.scalar('eval_loss',sum(eval_losses) / len(eval_losses),step=step_with_updates)
         if step%training_config.optimizer_config.gradient_accumulation_steps==0:
             step_with_updates += 1
     return model_params,opt_state,dp_state

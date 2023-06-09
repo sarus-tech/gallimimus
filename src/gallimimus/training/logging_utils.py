@@ -26,7 +26,8 @@ def _log_global_training_info(
     logger.info(f"  Model parameters = {n_params}")
 
 
-def _log_step_training_info(step: int, loss: int) -> None:
+def _log_step_training_info(step: int, loss: int,is_training:bool=True) -> None:
 
+    train= 'Train 'if is_training else 'Test'
     logger.info(f"***** Training step {step} *****")
-    logger.info(f"Current Loss = {loss}")
+    logger.info(f"Current {train} Loss = {loss}")
