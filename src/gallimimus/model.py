@@ -38,7 +38,7 @@ class UnitMetaLearner(nn.Module):
 
     def setup(self):
         self.starting_embedding = self.param(
-            "starting_embedding", nn.ones, (self.embed_dim,)
+            "starting_embedding", nn.initializers.uniform(), (self.embed_dim,)
         )
 
         self.trained_params_dict = self.param(
