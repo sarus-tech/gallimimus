@@ -176,9 +176,9 @@ class ListCodec(Codec):
         losses_item = (
             shared_codecs.loss(self.subcodec_in, x_items, pred_items, vmapped=True)
             * mask
-        ).sum()  # / x_len
+        ).mean()  # / x_len
         # TODO what loss do we want for a list? NLL is too restrictive (and badly conditioned for long lists)
-        return loss_len + losses_item
+        return {"loss_len": loss_len, "avg_loss_items": losses_item}
 
     def example(self, shared_codecs: SharedCodecs):
         example_len = jnp.array(self.max_len - 1)

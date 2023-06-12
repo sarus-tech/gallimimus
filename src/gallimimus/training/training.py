@@ -60,7 +60,7 @@ def train(
 
     # define and compile the update step:
     def standard_train_step(params:VariableDict, opt_state,dp_state, inputs)->typing.Tuple:
-        loss, grads = model.loss_and_grad(params, inputs)
+        loss, grads,loss_tree = model.loss_and_grad(params, inputs)
         updates, standard_state = standard_optimizer.update(
             grads, opt_state, params=params
         )
@@ -68,7 +68,7 @@ def train(
         return loss, params, standard_state, dp_state
 
     def dp_train_step(params:VariableDict, opt_state,dp_state, inputs)->typing.Tuple:
-        loss, grads = model.loss_and_per_example_grad(params, inputs)
+        loss, grads,loss_tree = model.loss_and_per_example_grad(params, inputs)
         grads, dp_state = dp_optimizer.update(grads, dp_state)
         updates, opt_state = standard_optimizer.update(
             grads, opt_state, params=params
@@ -81,7 +81,7 @@ def train(
         train_step = jax.jit(dp_train_step)
     else:
         # sgd takes the regular batch gradients
-        train_step = jax.jit(standard_train_step)
+        train_step = standard_train_step
     
     loss_func=jax.jit(model.batch_loss)
     

@@ -130,11 +130,11 @@ class StructCodec(Codec):
         prediction: StructPrediction,
         shared_codecs: SharedCodecs,
     ) -> jnp.ndarray:
-        losses = [
-            shared_codecs.loss(model_name=subcodec, x=x_i, prediction=pred_i)
+        losses = {
+            subcodec: shared_codecs.loss(model_name=subcodec, x=x_i, prediction=pred_i)
             for subcodec, x_i, pred_i in zip(self.subcodecs_in, x, prediction)
-        ]
-        return jnp.array(losses).sum()
+        }
+        return losses
 
     def example(self, shared_codecs: SharedCodecs) -> StructObservation:
         # iterate over self.subcodecs_in instead of self.subcodecs because they only exist after `setup` is done
