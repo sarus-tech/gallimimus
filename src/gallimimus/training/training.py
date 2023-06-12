@@ -27,7 +27,7 @@ def tree_transpose(list_of_trees: typing.List[typing.Any]):
 class TrainState:
     model_params:VariableDict
     dp_state:typing.Any
-    standard_state:Any
+    standard_state:typing.Any
 
 def train(
     model: MetaLearner,
@@ -35,6 +35,9 @@ def train(
     dataset: typing.Iterator[typing.List[Observation]],
     eval_set:typing.Iterator[typing.List[Observation]],
     training_config: TrainingConfig,
+    standard_state:typing.Optional[VariableDict],
+    dp_state:typing.Optional[VariableDict],
+    shift_step:int
 ) -> typing.Tuple[VariableDict,VariableDict,VariableDict]:
     """Train the model.
 
@@ -51,18 +54,20 @@ def train(
     )
 
     #TODO: Allow loading existing optim state
-    opt_state = standard_optimizer.init(model_params)
-    dp_state = dp_optimizer.init(model_params)
+    if standard_state is None:
+        standard_state = standard_optimizer.init(model_params)
+    if dp_state is None:
+        dp_state = dp_optimizer.init(model_params)
     summary_writer=SummaryWriter(training_config.check_point_config.tensorboard_dir)
 
     # define and compile the update step:
     def standard_train_step(params:VariableDict, opt_state,dp_state, inputs)->typing.Tuple:
         loss, grads = model.loss_and_grad(params, inputs)
-        updates, opt_state = standard_optimizer.update(
+        updates, standard_state = standard_optimizer.update(
             grads, opt_state, params=params
         )
         params = optax.apply_updates(params, updates)
-        return loss, params, opt_state, dp_state
+        return loss, params, standard_state, dp_state
 
     def dp_train_step(params:VariableDict, opt_state,dp_state, inputs)->typing.Tuple:
         loss, grads = model.loss_and_per_example_grad(params, inputs)
@@ -84,38 +89,36 @@ def train(
     
     loss_accumulation = []
     logged_losses = []
-    step_with_updates=1
     options = CheckpointManagerOptions(max_to_keep=3, keep_period=2)
     mngr = CheckpointManager(
         training_config.check_point_config.output_dir, PyTreeCheckpointer(),
         options=options)
     for step in range(1, training_config.num_train_steps + 1):
         batch = next(dataset)
-        batch_loss, model_params, opt_state, dp_state = train_step(
+        batch_loss, model_params, standard_state, dp_state = train_step(
             model_params,
-            opt_state,
+            standard_state,
             dp_state,
             batch
         )
         loss_accumulation.append(batch_loss.mean())
-        if step_with_updates % training_config.check_point_config.logging_steps == 0:
+        if (step+shift_step) % training_config.check_point_config.logging_steps == 0:
             loss_to_log = sum(loss_accumulation) / len(loss_accumulation)
-            _log_step_training_info(step=step_with_updates, loss=loss_to_log)
+            _log_step_training_info(step=shift_step+shift_step, loss=loss_to_log)
             logged_losses.append(loss_to_log)
             loss_accumulation = []
-            summary_writer.scalar('train_loss',loss_to_log,step=step_with_updates)
-        if step_with_updates % training_config.check_point_config.save_every_steps == 0:
-            train_state=TrainState(model_params,opt_state,dp_state)
-            mngr.save(step_with_updates, train_state)
+            summary_writer.scalar('train_loss',loss_to_log,step=step+shift_step)
+        if (step+shift_step) % training_config.check_point_config.save_every_steps == 0:
+            train_state=TrainState(model_params,dp_state,standard_state)
+            mngr.save(step+shift_step, train_state)
 
-        if training_config.eval_every_step is not None and step_with_updates%training_config.eval_every_step == 0:
+        if training_config.eval_every_step is not None and (shift_step+step)%training_config.eval_every_step == 0:
             eval_losses=[]
             for eval_batch in eval_set():
                 eval_losses.append(loss_func(model_params,eval_batch,rng))
             
-            _log_step_training_info(step=step_with_updates, loss=sum(eval_losses) / len(eval_losses),is_training=False)
-            summary_writer.scalar('eval_loss',sum(eval_losses) / len(eval_losses),step=step_with_updates)
-        if step%training_config.optimizer_config.gradient_accumulation_steps==0:
-            step_with_updates += 1
-    return model_params,opt_state,dp_state
+            _log_step_training_info(step=step+shift_step, loss=sum(eval_losses) / len(eval_losses),is_training=False)
+            summary_writer.scalar('eval_loss',sum(eval_losses) / len(eval_losses),step=step+shift_step)
+
+    return model_params,standard_state,dp_state
 
