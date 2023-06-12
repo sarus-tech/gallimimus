@@ -52,8 +52,6 @@ def train(
         num_train_steps=training_config.num_train_steps,
         optimizer_config=training_config.optimizer_config,
     )
-
-    #TODO: Allow loading existing optim state
     if standard_state is None:
         standard_state = standard_optimizer.init(model_params)
     if dp_state is None:
@@ -104,7 +102,7 @@ def train(
         loss_accumulation.append(batch_loss.mean())
         if (step+shift_step) % training_config.check_point_config.logging_steps == 0:
             loss_to_log = sum(loss_accumulation) / len(loss_accumulation)
-            _log_step_training_info(step=shift_step+shift_step, loss=loss_to_log)
+            _log_step_training_info(step=shift_step+step, loss=loss_to_log)
             logged_losses.append(loss_to_log)
             loss_accumulation = []
             summary_writer.scalar('train_loss',loss_to_log,step=step+shift_step)
@@ -115,7 +113,7 @@ def train(
         if training_config.eval_every_step is not None and (shift_step+step)%training_config.eval_every_step == 0:
             eval_losses=[]
             for eval_batch in eval_set():
-                eval_losses.append(loss_func(model_params,eval_batch,rng))
+                eval_losses.append(loss_func(model_params,eval_batch))
             
             _log_step_training_info(step=step+shift_step, loss=sum(eval_losses) / len(eval_losses),is_training=False)
             summary_writer.scalar('eval_loss',sum(eval_losses) / len(eval_losses),step=step+shift_step)
