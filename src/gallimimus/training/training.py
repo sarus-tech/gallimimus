@@ -60,12 +60,12 @@ def train(
 
     # define and compile the update step:
     def standard_train_step(params:VariableDict, opt_state,dp_state, inputs)->typing.Tuple:
-        loss, grads,loss_tree = model.loss_and_grad(params, inputs)
+        _, grads,loss_tree = model.loss_and_grad(params, inputs)
         updates, standard_state = standard_optimizer.update(
             grads, opt_state, params=params
         )
         params = optax.apply_updates(params, updates)
-        return loss, params, standard_state, dp_state
+        return jax.tree_map(lambda x:x.mean(),loss_tree), params, standard_state, dp_state,
 
     def dp_train_step(params:VariableDict, opt_state,dp_state, inputs)->typing.Tuple:
         loss, grads,loss_tree = model.loss_and_per_example_grad(params, inputs)
@@ -81,7 +81,7 @@ def train(
         train_step = jax.jit(dp_train_step)
     else:
         # sgd takes the regular batch gradients
-        train_step = standard_train_step
+        train_step = jax.jit(standard_train_step)
     
     loss_func=jax.jit(model.batch_loss)
     
@@ -99,13 +99,25 @@ def train(
             dp_state,
             batch
         )
-        loss_accumulation.append(batch_loss.mean())
+        loss_accumulation.append(batch_loss)
         if (step+shift_step) % training_config.check_point_config.logging_steps == 0:
-            loss_to_log = sum(loss_accumulation) / len(loss_accumulation)
+            
+            loss_to_log = sum(jax.tree_util.tree_flatten(loss_accumulation)[0]) / len(loss_accumulation)
             _log_step_training_info(step=shift_step+step, loss=loss_to_log)
             logged_losses.append(loss_to_log)
-            loss_accumulation = []
+            
+            
+            reorganised_loss=jax.tree_util.tree_transpose(
+            outer_treedef = jax.tree_util.tree_structure([0 for e in loss_accumulation]),
+            inner_treedef = jax.tree_util.tree_structure(loss_accumulation[0]),
+            pytree_to_transpose = loss_accumulation
+            )
             summary_writer.scalar('train_loss',loss_to_log,step=step+shift_step)
+            for key,vals in reorganised_loss.items():
+                summary_writer.scalar('train_loss_'+key,jnp.stack(vals).mean(),step=step+shift_step)
+            
+            loss_accumulation=[]
+            
         if (step+shift_step) % training_config.check_point_config.save_every_steps == 0:
             train_state=TrainState(model_params,dp_state,standard_state)
             mngr.save(step+shift_step, train_state)
@@ -113,10 +125,20 @@ def train(
         if training_config.eval_every_step is not None and (shift_step+step)%training_config.eval_every_step == 0:
             eval_losses=[]
             for eval_batch in eval_set():
-                eval_losses.append(loss_func(model_params,eval_batch))
+                eval_losses.append(jax.tree_map(lambda x:x.mean(),loss_func(model_params,eval_batch)[1]))
             
-            _log_step_training_info(step=step+shift_step, loss=sum(eval_losses) / len(eval_losses),is_training=False)
-            summary_writer.scalar('eval_loss',sum(eval_losses) / len(eval_losses),step=step+shift_step)
+            eval_loss = sum(jax.tree_util.tree_flatten(eval_losses)[0]) / len(eval_losses)
+            _log_step_training_info(step=step+shift_step, loss=eval_loss,is_training=False)
+            summary_writer.scalar('eval_loss',eval_loss ,step=step+shift_step)
+            
+            reorganised_loss=jax.tree_util.tree_transpose(
+            outer_treedef = jax.tree_util.tree_structure([0 for e in eval_losses]),
+            inner_treedef = jax.tree_util.tree_structure(eval_losses[0]),
+            pytree_to_transpose = eval_losses
+            )
+            for key,vals in reorganised_loss.items():
+                summary_writer.scalar('eval_loss_'+key,jnp.stack(vals).mean(),step=step+shift_step)
+            
 
     return model_params,standard_state,dp_state
 
