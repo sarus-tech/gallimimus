@@ -11,7 +11,7 @@ from flax.core.scope import VariableDict
 from jax.random import PRNGKeyArray
 
 from gallimimus.codec.abstract_codec import Codec, Observation
-from gallimimus.shared_codecs import SharedCodecs, init_shared_trained_param_dict
+from gallimimus.shared_codecs import SharedCodecs
 
 ModelDict = flax.core.FrozenDict[str, Codec]
 ParamDict = flax.core.FrozenDict[str, VariableDict]
@@ -27,6 +27,7 @@ class UnitMetaLearner(nn.Module):
     codec_in: str
     model_dict: ModelDict
     pretrained_params_dict: ParamDict
+    init_fn_dict: Dict
 
     def setup(self):
         embed_dim = self.model_dict[self.codec_in].embed_dim
@@ -36,10 +37,43 @@ class UnitMetaLearner(nn.Module):
 
         self.trained_params_dict = self.param(
             "trained_params_dict",
-            init_shared_trained_param_dict,
-            self.model_dict,
-            self.pretrained_params_dict,
+            self.init_shared_trained_param_dict,
         )
+
+    def init_shared_trained_param_dict(self, rng):
+        trained_params_dict = {}
+
+        # start with the shared models other than Codecs (which don't have dependancies)
+        for path, model_init_fn in self.init_fn_dict.items():
+            rng, rng2 = jax.random.split(rng, 2)
+            init_params = model_init_fn(rng2)
+            trained_params_dict[path] = init_params
+
+        pretrained_and_initialized = self.pretrained_params_dict.copy(
+            trained_params_dict
+        )
+
+        # then init the shared Codecs (which depends on the first steps)
+        for path, model in self.model_dict.items():
+            if path not in pretrained_and_initialized:
+                rng, rng2 = jax.random.split(rng, 2)
+
+                if isinstance(model, Codec):
+                    init_params = model.init(
+                        rngs={"params": rng2},
+                        method=model.init_pass,
+                        model_dict=self.model_dict,
+                        pretrained_params_dict=pretrained_and_initialized,
+                    )["params"]
+
+                else:
+                    raise ValueError(
+                        "Trained models other than Codecs must be provided with an initialization function fn(rng) -> params."
+                    )
+
+                trained_params_dict[path] = init_params
+
+        return flax.core.frozen_dict.freeze(trained_params_dict)
 
     def _shared_codecs(self):
         params_dict = self.pretrained_params_dict.copy(
@@ -119,6 +153,7 @@ class MetaLearner:
         codec_in: str,
         model_dict: Dict[str, Codec],
         pretrained_params_dict: Dict[str, VariableDict],
+        init_fn_dict: Dict = {},
     ):
         # the MetaLearner is created by vmapping the methods of the UnitMetaLearner defined above.
         # `unit_metalearner` is a stateful flax module, we convert all the methods we need to pure jax functions before vmapping:
@@ -129,6 +164,7 @@ class MetaLearner:
             codec_in=codec_in,
             model_dict=model_dict,
             pretrained_params_dict=pretrained_params_dict,
+            init_fn_dict=init_fn_dict,
             parent=None,
         )
 

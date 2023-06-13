@@ -42,7 +42,8 @@ EVAL_EVERY = 15 * GRADS_ACCUM
 SAVE_EVERY = 50 * GRADS_ACCUM
 TRAIN = False
 RESTORE = True
-SHIFT_STEP = 20000
+SHIFT_STEP = 5500
+DO_LORA = False
 
 ### Build the model
 """
@@ -91,17 +92,36 @@ lora_codec = LoraCodec(
     r=LORA_RANK,
 )
 
-modules_dict = {
+
+if DO_LORA:
+    modules_dict = {
     "text_codec": text_codec,
     "lora_codec": lora_codec,
     "distilgpt2": gptmodel,
 }
 
-pretrained_params = {"distilgpt2": gptmodel_params}
-model = MetaLearner(
-    codec_in="text_codec",
-    model_dict=modules_dict,
-    pretrained_params_dict=pretrained_params,
+
+    pretrained_params = {"distilgpt2": gptmodel_params}
+    init_fn_dict = {}
+    model = MetaLearner(
+        codec_in="lora_codec",
+        model_dict=modules_dict,
+        pretrained_params_dict=pretrained_params,
+        init_fn_dict=init_fn_dict
+)
+else:
+    modules_dict = {
+    "text_codec": text_codec,
+    "distilgpt2": gptmodel,
+}
+
+    pretrained_params = {}
+    init_fn_dict = {"distilgpt2": lambda rng: gptmodel_params}
+    model = MetaLearner(
+        codec_in="text_codec",
+        model_dict=modules_dict,
+        pretrained_params_dict=pretrained_params,
+        init_fn_dict=init_fn_dict
 )
 
 # ---------------TRAINING CONFIG------------------------
@@ -271,4 +291,6 @@ if TRAIN:
 s = model.sample(model_params, rng=jax.random.PRNGKey(0), size=10)
 
 
-print(tokenizer.batch_decode(s[-1]))
+text = tokenizer.batch_decode(s)
+
+print(text)

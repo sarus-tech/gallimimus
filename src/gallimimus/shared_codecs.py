@@ -14,24 +14,6 @@ Prediction = Any
 Embedding = jax.Array
 
 
-def init_shared_trained_param_dict(rng, model_dict, pretrained_params_dict):
-    trained_params_dict = {}
-
-    for path, model in model_dict.items():
-        if path not in pretrained_params_dict:
-            rng, rng2 = jax.random.split(rng, 2)
-            init_params = model.init(
-                rngs={"params": rng},
-                method=model.init_pass,
-                model_dict=model_dict,
-                pretrained_params_dict=pretrained_params_dict,
-            )["params"]
-
-            trained_params_dict[path] = init_params
-
-    return flax.core.frozen_dict.freeze(trained_params_dict)
-
-
 @dataclass
 class SharedCodecs:
     """TODO"""
