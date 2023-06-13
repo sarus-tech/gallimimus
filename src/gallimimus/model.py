@@ -11,15 +11,10 @@ from flax.core.scope import VariableDict
 from jax.random import PRNGKeyArray
 
 from gallimimus.codec.abstract_codec import Codec, Observation
-<<<<<<< HEAD
-from gallimimus.shared_codecs import SharedCodecs
-=======
 from gallimimus.shared_codecs import (
     SharedCodecs,
-    init_shared_trained_param_dict,
     MockSharedCodecs,
 )
->>>>>>> 4a6c66af2f527eb4a666d9dda26ee5f8efde8d30
 
 ModelDict = flax.core.FrozenDict[str, Codec]
 ParamDict = flax.core.FrozenDict[str, VariableDict]
