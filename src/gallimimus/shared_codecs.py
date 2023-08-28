@@ -116,6 +116,8 @@ class SharedCodecs:
 
 @dataclass
 class MockSharedCodecs:
+    # Having access to the shared models is necessary because they may have an
+    # arbitrary interface and therefore cannot be mocked.
     shared_models_dict: flax.core.FrozenDict
     shared_params_dict: flax.core.FrozenDict
     embed_dim: int

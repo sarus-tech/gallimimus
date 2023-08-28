@@ -46,19 +46,24 @@ class UnitMetaLearner(nn.Module):
         )
 
     def init_shared_trained_param_dict(self, rng):
-        trained_params_dict = {}
-
-        # start with the shared models other than Codecs (which don't have dependancies)
+        # 1. start with the shared models other than Codecs (which don't have
+        # dependancies, and cannot be mocked because they may have an arbitrary
+        # interface).
+        init_params_noncodec_dict = {}
         for path, model_init_fn in self.init_fn_dict.items():
             rng, rng2 = jax.random.split(rng, 2)
             init_params = model_init_fn(rng2)
-            trained_params_dict[path] = init_params
-
+            init_params_noncodec_dict[path] = init_params
+        init_params_noncodec_dict = flax.core.frozen_dict.freeze(
+            init_params_noncodec_dict
+        )
+        # 2. merge the pretrained params with the params initialized in 1.
         pretrained_and_initialized = self.pretrained_params_dict.copy(
-            trained_params_dict
+            init_params_noncodec_dict
         )
 
-        # then init the shared Codecs (which depends on the first steps)
+        # 3. then init the shared Codecs (which may depend on the shared models)
+        init_params_codec_dict = {}
         for path, model in self.model_dict.items():
             if path not in pretrained_and_initialized:
                 rng, rng2 = jax.random.split(rng, 2)
@@ -74,14 +79,18 @@ class UnitMetaLearner(nn.Module):
                 else:
                     raise ValueError(
                         "Trained models other than Codecs must be provided with an"
-                        " initialization function fn(rng) -> params."
+                        " initialization function fn(rng) -> params in `init_fn_dict`."
                     )
 
-                trained_params_dict[path] = init_params
+                init_params_codec_dict[path] = init_params
+        init_params_codec_dict = flax.core.frozen_dict.freeze(init_params_codec_dict)
 
+        trained_params_dict = init_params_noncodec_dict.copy(init_params_codec_dict)
         return flax.core.frozen_dict.freeze(trained_params_dict)
 
     def _shared_codecs(self):
+        # during setup calling a shared subcodec returns a standard response
+        # (because this subcodec may not be initialized yet)
         if self.is_initializing():
             shared_codecs = MockSharedCodecs(
                 embed_dim=self.embed_dim,
@@ -92,6 +101,7 @@ class UnitMetaLearner(nn.Module):
             params_dict = self.pretrained_params_dict.copy(
                 add_or_replace=self.trained_params_dict
             )
+
             shared_codecs = SharedCodecs(
                 shared_models_dict=self.model_dict,
                 shared_params_dict=params_dict,
