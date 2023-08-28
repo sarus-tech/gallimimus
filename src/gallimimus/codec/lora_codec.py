@@ -25,6 +25,8 @@ class LoraCodec(Codec):
     lora_module_name: str
     filter_fn: FilterFunction
     r: int
+    alpha: float
+
 
     @nn.compact
     def apply_lora(self, shared_codecs: SharedCodecs):
@@ -43,6 +45,8 @@ class LoraCodec(Codec):
         summed_params = lora_combine_params(
             pretrained_params=pretrained_params,
             lora_params=lora_params,
+            alpha=self.alpha
+
         )
 
         return shared_codecs.update_params(
