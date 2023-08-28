@@ -29,7 +29,7 @@ class CategoricalCodec(Codec):
             num_embeddings=self.vocab_size,
             features=self.embed_dim,
         )
-        self.bias = self.param("bias_decoding", nn.ones, (self.vocab_size,))
+        self.bias = self.param("bias_decoding", nn.zeros, (self.vocab_size,))
 
     def encode(
         self, x: CategoricalObservation, shared_codecs: SharedCodecs
