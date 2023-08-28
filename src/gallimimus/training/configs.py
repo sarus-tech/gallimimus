@@ -7,7 +7,7 @@ from gallimimus.training.optimizer import OptimizerConfig
 
 @dataclass
 class TrainingConfig:
-    """General config during training"""
+    """General config during training."""
 
     random_seed: int
     optimizer_config: OptimizerConfig
@@ -20,8 +20,10 @@ class TrainingConfig:
         default="float32",
         metadata={"help": "Dtype of params to reduce memory"},
     )
-    eval_every_step:int=field(default=None,metadata={"help": "Evaluate on test set every tot updates"})
-    
+    eval_every_step: int = field(
+        default=None,
+        metadata={"help": "Evaluate on test set every tot updates"},
+    )
 
 
 @dataclass
@@ -52,6 +54,6 @@ class CheckpointConfig:
     save_every_steps: int = field(
         default=5, metadata={"help": "Save checkpoint every X updates steps."}
     )
-    tensorboard_dir:str=field(
-        default='', metadata={"help": "Save checkpoint every X updates steps."}
+    tensorboard_dir: str = field(
+        default="", metadata={"help": "Save checkpoint every X updates steps."}
     )

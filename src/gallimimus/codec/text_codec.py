@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Tuple, Any, Dict
+from typing import Any, Dict, Tuple
 
 import flax
 import flax.linen as nn
@@ -20,10 +20,10 @@ GPTPrediction = jax.Array  # un-normalized logits of shape (TODO, N_tokens,)
 
 
 class TextCodec(Codec):
-    """Codec for textual data"""
+    """Codec for textual data."""
 
     n_tokens: int
-    """number of tokens modeled by the context"""
+    """Number of tokens modeled by the context."""
     max_length: int
 
     model_name: str
@@ -170,7 +170,9 @@ class TextCodec(Codec):
             )
 
             predictions = gpt2_model.apply(
-                {"params": gpt2_params}, query=hidden_states, method="_wte_attend"
+                {"params": gpt2_params},
+                query=hidden_states,
+                method="_wte_attend",
             )
 
             logits = predictions[0].at[curr_len - 1].get()
@@ -181,7 +183,9 @@ class TextCodec(Codec):
             # Update embeddings
             position_id_next_token = jnp.array(curr_len)
             pos_emb = gpt2_model.apply(
-                {"params": gpt2_params}, inputs=position_id_next_token, method="_wpe"
+                {"params": gpt2_params},
+                inputs=position_id_next_token,
+                method="_wpe",
             )
             tok_emb = gpt2_model.apply(
                 {"params": gpt2_params}, inputs=next_token, method="_wte"
@@ -281,7 +285,7 @@ class TextCodec(Codec):
 
 @flax.struct.dataclass
 class SampleState:
-    """State used to process sampling"""
+    """State used to process sampling."""
 
     cur_len: int
     running_embeddings: jnp.ndarray

@@ -7,9 +7,9 @@ import jax.numpy as jnp
 
 from gallimimus.codec.abstract_codec import (
     Codec,
+    Context,
     Embedding,
     Observation,
-    Context,
     Prediction,
 )
 from gallimimus.shared_codecs import SharedCodecs
@@ -23,11 +23,12 @@ StructPrediction = List[Prediction]  # of length N
 
 
 class StructCodec(Codec):
-    """A codec for tabular data where the columns are generated each using their own sub-codec, as provided
-    by ``subcodecs_in``.
+    """A codec for tabular data where the columns are generated each using their own
+    sub-codec, as provided by ``subcodecs_in``.
 
-    If ``subcodecs_in = [subcodec_1, ..., subcodec_n]`` and ``subcodec_i`` handles type SubObservation_i,
-    an observation has type ``Tuple[SubObservation_1, ..., SubObservation_n]``.
+    If ``subcodecs_in = [subcodec_1, ..., subcodec_n]`` and ``subcodec_i`` handles type
+    SubObservation_i, then an observation has type ``Tuple[SubObservation_1, ...,
+    SubObservation_n]``.
 
     :param embed_dim: Size of the embeddings.
     :param subcodecs_in: List of the Codecs used for each column.
@@ -41,10 +42,14 @@ class StructCodec(Codec):
 
     def setup(self):
         self.encoder = Transformer(
-            num_heads=self.n_heads, num_blocks=self.n_blocks, embed_dim=self.embed_dim
+            num_heads=self.n_heads,
+            num_blocks=self.n_blocks,
+            embed_dim=self.embed_dim,
         )
         self.decoder = Transformer(
-            num_heads=self.n_heads, num_blocks=self.n_blocks, embed_dim=self.embed_dim
+            num_heads=self.n_heads,
+            num_blocks=self.n_blocks,
+            embed_dim=self.embed_dim,
         )
 
     def encode(
@@ -115,7 +120,9 @@ class StructCodec(Codec):
 
             # sample from the next column
             sample_i, embedding_i = shared_codecs.sample(
-                subcodec_i, conditioning_vector=conditioning_vector_i, rng=rngs[i]
+                subcodec_i,
+                conditioning_vector=conditioning_vector_i,
+                rng=rngs[i],
             )
 
             samples.append(sample_i)
@@ -137,7 +144,8 @@ class StructCodec(Codec):
         return losses
 
     def example(self, shared_codecs: SharedCodecs) -> StructObservation:
-        # iterate over self.subcodecs_in instead of self.subcodecs because they only exist after `setup` is done
+        # iterate over self.subcodecs_in instead of self.subcodecs because they only
+        # exist after `setup` is done
         sub_examples = [
             shared_codecs.example(subcodec) for subcodec in self.subcodecs_in
         ]

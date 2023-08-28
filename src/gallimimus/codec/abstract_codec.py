@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import abc
-from typing import TypeVar, Tuple
+from typing import Tuple, TypeVar
 
 import jax
 from flax import linen as nn
@@ -16,12 +16,17 @@ Prediction = TypeVar("Prediction")
 
 
 class Codec(nn.Module, abc.ABC):
-    """The abstract interface of a codec. Each concrete codec implements the ``Codec``
-    interface for a specific data-type."""
+    """The abstract interface of a codec.
+
+    Each concrete codec implements the ``Codec``
+    interface for a specific data-type.
+    """
 
     embed_dim: int
-    """Size of the embeddings. 
-    Should be the same for all the codecs in the tree of codecs."""
+    """Size of the embeddings.
+
+    Should be the same for all the codecs in the tree of codecs.
+    """
 
     @abc.abstractmethod
     def encode(
@@ -34,7 +39,8 @@ class Codec(nn.Module, abc.ABC):
         :return: A pair containing
 
          - an embedding vector of shape ``(self.embed_dim,)``
-         - a context containing the embeddings for the substructures of ``x``."""
+         - a context containing the embeddings for the substructures of ``x``.
+        """
         ...
 
     @abc.abstractmethod
@@ -45,12 +51,14 @@ class Codec(nn.Module, abc.ABC):
         shared_codecs: SharedCodecs,
     ) -> Prediction:
         """Turn a ``conditioning_vector`` into a predicted probability distribution,
-        using the embeddings in the ``context`` in places where autoregressive sampling would occur.
+        using the embeddings in the ``context`` in places where autoregressive sampling
+        would occur.
 
         :param conditioning_vector: Conditioning vector of shape ``(self.embed_dim,)``.
         :param context: Embeddings of the substructures as given by ``encode``.
         :param shared_codecs: All the codecs used in the model, and their parameters.
-        :return: A representation of the probability distribution predicted from the conditioning vector.
+        :return: A representation of the probability distribution predicted from the
+            conditioning vector.
         """
         ...
 
@@ -58,25 +66,29 @@ class Codec(nn.Module, abc.ABC):
     def sample(
         self, conditioning_vector: Embedding, shared_codecs: SharedCodecs
     ) -> Tuple[Observation, Embedding]:
-        """
-        Sample a single observation, as conditioned by the ``conditioning_vector``.
+        """Sample a single observation, as conditioned by the ``conditioning_vector``.
 
         :param conditioning_vector: Conditioning vector of shape ``(self.embed_dim,)``.
         :param shared_codecs: All the codecs used in the model, and their parameters.
-        :return: A sample from the probability predicted by the conditioning vector, and its embedding.
+        :return: A sample from the probability predicted by the conditioning vector, and
+            its embedding.
         """
         ...
 
     @abc.abstractmethod
     def loss(
-        self, x: Observation, prediction: Prediction, shared_codecs: SharedCodecs
+        self,
+        x: Observation,
+        prediction: Prediction,
+        shared_codecs: SharedCodecs,
     ) -> jnp.ndarray:  # of shape ()
         """Returns the negative log-likelihood of ``x`` in the provided distribution.
 
         :param x: An observation of the data type expected by the codec.
         :param prediction: A representation of a probability distribution.
         :param shared_codecs: All the codecs used in the model, and their parameters.
-        :return: The negative log-likelihood of ``x`` in this distribution."""
+        :return: The negative log-likelihood of ``x`` in this distribution.
+        """
         ...
 
     @abc.abstractmethod
@@ -84,7 +96,8 @@ class Codec(nn.Module, abc.ABC):
         """Convenience function which provides an example input for the model.
 
         :param: shared_codecs: All the codecs used in the model, and their parameters.
-        :return: An example observation of the data type expected by the codec."""
+        :return: An example observation of the data type expected by the codec.
+        """
         ...
 
     def init_pass(self, model_dict={}, pretrained_params_dict={}):

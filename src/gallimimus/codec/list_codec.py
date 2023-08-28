@@ -8,9 +8,9 @@ from flax import linen as nn
 
 from gallimimus.codec.abstract_codec import (
     Codec,
+    Context,
     Embedding,
     Observation,
-    Context,
     Prediction,
 )
 from gallimimus.codec.categorical_codec import CategoricalCodec
@@ -27,24 +27,29 @@ ListPrediction = Tuple[jax.Array, Prediction]
 
 
 class ListCodec(Codec):
-    """Formally the ListCodec behaves like a ``StructCodec[Categorical(max_len+1), subcodec, ..., subcodec]`` where ``subcodec``
-    is repeated ``buffer_size`` times, except that the loss of ``(len_x, items_x)`` only looks at the ``len_x`` first columns.
+    """Formally the ListCodec behaves like a ``StructCodec[Categorical(max_len+1),
+    subcodec, ..., subcodec]`` where ``subcodec`` is repeated ``buffer_size`` times,
+    except that the loss of ``(len_x, items_x)`` only looks at the ``len_x`` first
+    columns.
 
-    For efficiency reasons, a vectorized version of the ``subcodec`` is used (otherwise jit compilation unrolls the loops).
-    Due to this, an observation is a Pytree where the items are stacked on the first dimension of their leaves.
+    For efficiency reasons, a vectorized version of the ``subcodec`` is used (otherwise
+    jit compilation unrolls the loops). Due to this, an observation is a Pytree where
+    the items are stacked on the first dimension of their leaves.
 
-    If the observations of the ``subcodec`` are of type SubObservation, observations for the ``ListCodec``
-    are a tuple containing:
+    If the observations of the ``subcodec`` are of type SubObservation, observations for
+    the ``ListCodec`` are a tuple containing:
 
     - a jax.Array of shape ``()`` containing an ``int`` in [0, ``max_len``]
-    - a stack of SubObservations (which is a PyTree), so that length of the first dimension of the leaves is ``buffer_size``
+    - a stack of SubObservations (which is a PyTree), so that length of the first
+        dimension of the leaves is ``buffer_size``
 
     :param embed_dim: Size of the embeddings.
     :param subcodec_in: Codec used to generate the items in the list.
     :param n_heads: Number of transformer heads.
     :param n_blocks: Number of transformer blocks.
     :param max_len: Maximum size of the generated list.
-    :param buffer_size: Size of the buffer used for training. Must be smaller than ``max_len``.
+    :param buffer_size: Size of the buffer used for training. Must be smaller than
+        ``max_len``.
     """
 
     subcodec_in: str
@@ -61,10 +66,14 @@ class ListCodec(Codec):
         )
 
         self.encoder = Transformer(
-            num_heads=self.n_heads, num_blocks=self.n_blocks, embed_dim=self.embed_dim
+            num_heads=self.n_heads,
+            num_blocks=self.n_blocks,
+            embed_dim=self.embed_dim,
         )
         self.decoder = Transformer(
-            num_heads=self.n_heads, num_blocks=self.n_blocks, embed_dim=self.embed_dim
+            num_heads=self.n_heads,
+            num_blocks=self.n_blocks,
+            embed_dim=self.embed_dim,
         )
 
     def encode(
@@ -177,13 +186,15 @@ class ListCodec(Codec):
             shared_codecs.loss(self.subcodec_in, x_items, pred_items, vmapped=True)
             * mask
         ).mean()  # / x_len
-        # TODO what loss do we want for a list? NLL is too restrictive (and badly conditioned for long lists)
+        # TODO what loss do we want for a list? NLL is too restrictive
+        #   (and badly conditioned for long lists)
         return {"loss_len": loss_len, "avg_loss_items": losses_item}
 
     def example(self, shared_codecs: SharedCodecs):
         example_len = jnp.array(self.max_len - 1)
 
-        # stack by hand instead of using the vmapped subcodec because it only exists after `setup` is done
+        # stack by hand instead of using the vmapped subcodec because it only exists
+        # after `setup` is done
         example_item = shared_codecs.example(self.subcodec_in)
         example_items_list = [example_item for _ in range(self.buffer_size)]
         example_items = jax.tree_map(lambda *s: jnp.stack(s), *example_items_list)

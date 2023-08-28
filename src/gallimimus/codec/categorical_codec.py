@@ -17,10 +17,12 @@ CategoricalPrediction = jax.Array  # un-normalized logits of shape (vocab_size,)
 class CategoricalCodec(Codec):
     """Handles an integer in [0, ``vocab_size``-1].
 
-    An observation is a jax.Array of shape ``()`` containing an ``int`` in [0, ``vocab_size``-1].
+    An observation is a jax.Array of shape ``()`` containing an ``int`` in
+    the interval [0, ``vocab_size``-1].
 
     :param embed_dim: size of the embeddings.
-    :param vocab_size: Number of possible values"""
+    :param vocab_size: Number of possible values
+    """
 
     vocab_size: int
 

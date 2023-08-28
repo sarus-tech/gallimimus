@@ -17,16 +17,16 @@ CategoricalPrediction = jax.Array  # un-normalized logits of shape (vocab_size,)
 
 
 class LoraCodec(Codec):
-    """TODO
+    """TODO.
 
-    :param embed_dim: size of the embeddings."""
+    :param embed_dim: size of the embeddings.
+    """
 
     subcodec_in: str
     lora_module_name: str
     filter_fn: FilterFunction
     r: int
-    alpha: float
-
+    alpha: float = 0.1
 
     @nn.compact
     def apply_lora(self, shared_codecs: SharedCodecs):
@@ -34,19 +34,23 @@ class LoraCodec(Codec):
 
         if self.lora_module_name not in params_dict:
             raise KeyError(
-                f"Pretrained parameters for `{self.lora_module_name}` were not provided. "
+                f"Pretrained parameters for `{self.lora_module_name}` were not"
+                " provided. "
             )
         pretrained_params = params_dict[self.lora_module_name]
 
         lora_params = self.param(
-            "lora_params", init_lora_params, pretrained_params, self.filter_fn, self.r
+            "lora_params",
+            init_lora_params,
+            pretrained_params,
+            self.filter_fn,
+            self.r,
         )
 
         summed_params = lora_combine_params(
             pretrained_params=pretrained_params,
             lora_params=lora_params,
-            alpha=self.alpha
-
+            alpha=self.alpha,
         )
 
         return shared_codecs.update_params(
@@ -61,7 +65,10 @@ class LoraCodec(Codec):
         return lora_shared_codecs.encode(model_name=self.subcodec_in, x=x)
 
     def decode(
-        self, conditioning_vector: Embedding, context: CategoricalContext, shared_codecs
+        self,
+        conditioning_vector: Embedding,
+        context: CategoricalContext,
+        shared_codecs,
     ) -> CategoricalPrediction:
         lora_shared_codecs = self.apply_lora(shared_codecs)
         return lora_shared_codecs.decode(

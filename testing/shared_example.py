@@ -4,11 +4,7 @@ import optax
 from jax import config
 
 from gallimimus import MetaLearner, TrainingHyperparameters, train
-from gallimimus.codec import (
-    CategoricalCodec,
-    StructCodec,
-    LoraCodec,
-)
+from gallimimus.codec import CategoricalCodec, LoraCodec, StructCodec
 
 config.update("jax_debug_nans", True)
 

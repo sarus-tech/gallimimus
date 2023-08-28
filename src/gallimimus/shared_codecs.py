@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Tuple, Any
+from typing import Any, Tuple
 
 import flax
 import jax
@@ -16,7 +16,7 @@ Embedding = jax.Array
 
 @dataclass
 class SharedCodecs:
-    """TODO"""
+    """TODO."""
 
     shared_models_dict: flax.core.FrozenDict
     shared_params_dict: flax.core.FrozenDict

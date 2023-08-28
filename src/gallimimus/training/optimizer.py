@@ -15,11 +15,13 @@ OPTIMIZER_NAME = "opt_state.msgpack"
 @dataclass
 class OptimizerConfig:
     """Config to specify the optimizer, it wraps:
+
     - whether dp or not
     - whether to have a decayed learning rate
     - the type: adam or sgs
     - whether to accumulate gradients
-    - whether to load an existing optimizer"""
+    - whether to load an existing optimizer
+    """
 
     is_dp: bool = field(
         metadata={"help": "Whether to train with Differential Privacy or not"}
@@ -29,13 +31,11 @@ class OptimizerConfig:
         metadata={"help": "Clipping norm for per_sample gradient"},
     )
     noise_multiplier: float = field(
-        default=0., metadata={"help": "Noise std to add at each iteration"}
+        default=0.0, metadata={"help": "Noise std to add at each iteration"}
     )
     optim: str = field(
         default="adam",
-        metadata={
-            "help": 'The optimizer to use. Can be "adam" (default) or "sgd"'
-        },
+        metadata={"help": 'The optimizer to use. Can be "adam" (default) or "sgd"'},
     )
     gradient_accumulation_steps: int = field(
         default=1,
@@ -90,8 +90,7 @@ class OptimizerConfig:
         default=None,
         metadata={
             "help": (
-                "Decay rate associated with learning rate when using"
-                " exponential decay."
+                "Decay rate associated with learning rate when using exponential decay."
             )
         },
     )
@@ -106,9 +105,7 @@ class OptimizerConfig:
     )
     lr_offset: int = field(
         default=0,
-        metadata={
-            "help": "Number of steps to offset learning rate and keep it at 0."
-        },
+        metadata={"help": "Number of steps to offset learning rate and keep it at 0."},
     )
     load_state: bool = field(
         default=False,
@@ -118,7 +115,7 @@ class OptimizerConfig:
         default="",
         metadata={"help": "Directory where to load the optimizer if it exist"},
     )
-    dp_init_seed:int=field(
+    dp_init_seed: int = field(
         default=0,
         metadata={"help": "Seed to init state of dp optimizer for noise"},
     )
@@ -127,8 +124,10 @@ class OptimizerConfig:
 def _create_learning_rate_fn(
     num_train_steps: int, optimizer_args: OptimizerConfig
 ) -> t.Callable[[int], jnp.array]:
-    """Create the learning rate function. It consists
-    in a constant learning rate followed by a decay"""
+    """Create the learning rate function.
+
+    It consists in a constant learning rate followed by a decay
+    """
 
     warmup_fn = optax.linear_schedule(
         init_value=optimizer_args.learning_rate,
@@ -172,6 +171,7 @@ def get_optimizers(
     num_train_steps: int, optimizer_config: OptimizerConfig
 ) -> t.Tuple[optax.GradientTransformation, optax.GradientTransformation]:
     """Method to retrieve the optimizers from the config.
+
     We currently use two optimizers: one to apply dp aggregation to
     the gradients and one for the rest (lr scaling+ aggregation).
     This is necessary because the dp aggregation changes the shape
