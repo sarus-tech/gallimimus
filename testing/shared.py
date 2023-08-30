@@ -4,19 +4,14 @@ from pathlib import Path
 
 import jax.numpy as jnp
 import jax.random
-import numpy as np
-from faker.providers.person.en import Provider
 from orbax.checkpoint import (
     CheckpointManager,
     CheckpointManagerOptions,
     PyTreeCheckpointer,
 )
-from transformers import AutoConfig, AutoTokenizer, FlaxGPT2Model
-from transformers.models.gpt2.modeling_flax_gpt2 import FlaxGPT2Module
 
 from gallimimus import MetaLearner
-from gallimimus.codec import LoraCodec
-from gallimimus.codec.text_codec import TextCodec
+from gallimimus.codec import CategoricalCodec, LoraCodec, StructCodec
 from gallimimus.training.configs import (
     CheckpointConfig,
     OptimizerConfig,
@@ -37,89 +32,62 @@ TEST_BATCH_SIZE = TRAIN_BATCH_SIZE
 TRAIN_STEPS = 100
 GRADS_ACCUM = 1
 TRAIN_DP = False
-DS_LENGTH = 1000
-EVAL_LENGTH = 100
+
 EVAL_EVERY = 15 * GRADS_ACCUM
 SAVE_EVERY = 50 * GRADS_ACCUM
-TRAIN = False
+TRAIN = True
 RESTORE = False
 SHIFT_STEP = 0
 DO_LORA = False
 
+### dataset
+
+max_cat = 10
+N_obs = 1000
+
+dataset = (jnp.arange(N_obs) % max_cat, jnp.arange(N_obs) ** 2 % max_cat)
+
 ### Build the model
-"""
-Building the GPT2 model
 
-Warning! Monkeypatched to expose internal methods
-"""
-gpt2_model_config = AutoConfig.from_pretrained(TEXT_MODEL)
-gptmodel_params = FlaxGPT2Model(gpt2_model_config).params
-gptmodel = FlaxGPT2Module(gpt2_model_config)
-
-
-def make_fn(method_name):
-    def fn(self, *args, **kwargs):
-        return getattr(self, method_name)(*args, **kwargs)
-
-    return fn
-
-
-for method_name in ["wpe", "wte", "h", "ln_f", "wpe_attend", "wte_attend"]:
-    setattr(FlaxGPT2Module, f"_{method_name}", make_fn(method_name))
-
-
-def make_fn_attend(method_name):
-    def fn(self, *args, **kwargs):
-        return getattr(self, method_name).attend(*args, **kwargs)
-
-    return fn
-
-
-for method_name in ["wpe", "wte"]:
-    setattr(FlaxGPT2Module, f"_{method_name}_attend", make_fn_attend(method_name))
-
-text_codec = TextCodec(
+cat_codec = CategoricalCodec(
     embed_dim=EMBED_DIM,
-    n_tokens=N_TOKENS,
-    max_length=MAX_LENGTH,
-    model_name="distilgpt2",
+    vocab_size=max_cat,
 )
 
+lora_codec = LoraCodec(
+    embed_dim=EMBED_DIM,
+    subcodec_in="cat_codec",
+    lora_module_name="cat_codec",
+    filter_fn=lambda path, arr: len(arr.shape) == 2,
+    r=LORA_RANK,
+)
+
+struct_codec = StructCodec(
+    embed_dim=EMBED_DIM,
+    n_heads=8,
+    n_blocks=2,
+    subcodecs_in=["lora_codec", "lora_codec"],
+)
 
 modules_dict = {
-    "text_codec": text_codec,
-    "distilgpt2": gptmodel,
+    "cat_codec": cat_codec,
+    "lora_codec": lora_codec,
+    "struct_codec": struct_codec,
 }
 
-if DO_LORA:
-    lora_codec = LoraCodec(
-        embed_dim=EMBED_DIM,
-        subcodec_in="text_codec",
-        lora_module_name=TEXT_MODEL,
-        filter_fn=lambda path, arr: "kernel" in path,
-        r=LORA_RANK,
-    )
 
-    modules_dict["lora_codec"] = lora_codec
+cat_codec_params = cat_codec.init(rngs=jax.random.PRNGKey(0), method="init_pass")[
+    "params"
+]
 
-    pretrained_params = {"distilgpt2": gptmodel_params}
-    init_fn_dict = {}
-    model = MetaLearner(
-        codec_in="lora_codec",
-        model_dict=modules_dict,
-        pretrained_params_dict=pretrained_params,
-        init_fn_dict=init_fn_dict,
-    )
-
-else:
-    pretrained_params = {}
-    init_fn_dict = {"distilgpt2": lambda rng: gptmodel_params}
-    model = MetaLearner(
-        codec_in="text_codec",
-        model_dict=modules_dict,
-        pretrained_params_dict=pretrained_params,
-        init_fn_dict=init_fn_dict,
-    )
+pretrained_params = {"cat_codec": cat_codec_params}
+init_fn_dict = {}
+model = MetaLearner(
+    codec_in="struct_codec",
+    model_dict=modules_dict,
+    pretrained_params_dict=pretrained_params,
+    init_fn_dict=init_fn_dict,
+)
 
 # ---------------TRAINING CONFIG------------------------
 optimizer_dp = OptimizerConfig(
@@ -145,7 +113,7 @@ optimizer_no_dp = OptimizerConfig(
     state_dir="",  # no lr decay
 )
 
-save_dir = os.path.join(str(Path(__file__).parent), "names_dataset_results")
+save_dir = os.path.join(str(Path(__file__).parent), "shared_codec_example_results")
 output_dir = (
     os.path.join(save_dir, "dp_training")
     if TRAIN_DP
@@ -193,55 +161,21 @@ training_config = (
     )
 )
 
+split = int(0.9 * N_obs)
 
-#### make dataset
-
-tokenizer = AutoTokenizer.from_pretrained("distilgpt2")
-tokenizer.pad_token = tokenizer.eos_token
-
-
-def make_names(size_train, size_eval):
-    first_names = list(set(Provider.first_names))
-    last_names = list(set(Provider.last_names))
-
-    full_size = size_train + size_eval
-    first_names_r = np.random.choice(first_names, size=full_size)
-    last_names_r = np.random.choice(last_names, size=full_size)
-
-    names = [
-        f"{first_name} {last_name}"
-        for first_name, last_name in zip(first_names_r, last_names_r)
-    ]
-
-    tokenized_data = tokenizer(names, padding="longest").data
-    tokenized_data = {k: jnp.array(v) for k, v in tokenized_data.items()}
-
-    tokenized_data["input_ids"] = jnp.concatenate(
-        [
-            jnp.full((full_size, 1), tokenizer.bos_token_id),
-            tokenized_data["input_ids"],
-        ],
-        axis=-1,
-    )
-    tokenized_data["attention_mask"] = jnp.concatenate(
-        [jnp.ones((full_size, 2)), tokenized_data["attention_mask"][:, :-1]],
-        axis=-1,
-    )
-    position_ids = jnp.cumsum(tokenized_data["attention_mask"], axis=-1)
-    tokenized_data["position_ids"] = position_ids
-
-    dataset = jax.tree_util.tree_map(lambda arr: arr[:size_train], tokenized_data)
-    test_set = jax.tree_util.tree_map(lambda arr: arr[size_train:], tokenized_data)
-
-    return dataset, test_set
-
-
-train_set, test_set = make_names(DS_LENGTH, EVAL_LENGTH)
+train_set, test_set = jax.tree_map(
+    lambda x: x[:split],
+    dataset,
+), jax.tree_map(
+    lambda x: x[split:],
+    dataset,
+)
 
 
 def jax_iterator(dataset):
+    ds_len = len(dataset[0])
     while True:
-        for i in range(int(DS_LENGTH / TRAIN_BATCH_SIZE)):
+        for i in range(int(ds_len / TRAIN_BATCH_SIZE)):
             yield jax.tree_map(
                 lambda x: x[i * TRAIN_BATCH_SIZE : (i + 1) * TRAIN_BATCH_SIZE],
                 dataset,
@@ -249,7 +183,8 @@ def jax_iterator(dataset):
 
 
 def test_iterator():
-    for i in range(int(EVAL_LENGTH / TEST_BATCH_SIZE)):
+    eval_len = len(test_set[0])
+    for i in range(int(eval_len / TEST_BATCH_SIZE)):
         yield jax.tree_map(
             lambda x: x[i * TEST_BATCH_SIZE : (i + 1) * TEST_BATCH_SIZE],
             test_set,
@@ -292,6 +227,5 @@ if TRAIN:
 
 s = model.sample(model_params, rng=jax.random.PRNGKey(0), size=10)
 
-text = tokenizer.batch_decode(s)
 
-print(text)
+print(s)
