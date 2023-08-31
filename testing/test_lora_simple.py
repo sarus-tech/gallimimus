@@ -1,4 +1,4 @@
-"""LoRA example with linear regression."""
+"""LoRA example: linear regression with an MLP."""
 import time
 
 import flax
@@ -35,7 +35,6 @@ print("x shape:", x_samples.shape, "; y shape:", y_samples.shape)
 
 ##################
 
-
 model_pre = nn.Dense(features=5)
 rng = random.PRNGKey(0)
 
@@ -47,22 +46,20 @@ pretrained_params = flax.core.freeze(
 )
 
 
-model = LoRA(
+lora_model = LoRA(
     target_module=model_pre,
     pretrained_params=pretrained_params,
     filter_fn=lambda param_name, param: len(param.shape) == 2,
     r=5,
 )
 
-lora_params = model.init({"params": rng}, test_input, method="__call__")
-
-model.apply(lora_params, test_input)
+init_lora_params = lora_model.init({"params": rng}, test_input, method="__call__")
 
 
 def mse(params, x_batched, y_batched):
     # Define the squared loss for a single pair (x,y)
     def squared_error(x, y):
-        pred = model.apply(params, x)
+        pred = lora_model.apply(params, x)
         return jnp.inner(y - pred, y - pred) / 2.0
 
     # Vectorize the previous to compute the average of the loss on all samples.
@@ -80,7 +77,7 @@ def update_params(params, learning_rate, grads):
     return params
 
 
-params = lora_params
+params = init_lora_params
 for i in range(201):
     t0 = time.perf_counter()
     # Perform one gradient update.
@@ -91,6 +88,6 @@ for i in range(201):
     if i % 10 == 0:
         a, b = params["params"]["lora"]["kernel"]
         print(
-            f"Loss step {i:<5}: {loss_val:.4f}, norm = {jnp.linalg.norm(W - a@b):.4f},"
-            f" t={t1-t0}"
+            f"Loss step {i:<5}| loss={loss_val:.4f}, distance to the"
+            f" optimum={jnp.linalg.norm(W - a@b):.4f}, t={t1-t0:.4f}"
         )

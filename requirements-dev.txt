@@ -3,3 +3,4 @@ transformers
 datasets
 faker
 pre-commit
+pandas

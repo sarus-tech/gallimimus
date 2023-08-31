@@ -40,7 +40,7 @@ def init_lora_params(
         assert len(shape) == 2
 
         a, b = shape[0], shape[-1]
-        A = jax.random.normal(key=rng, shape=(a, r))
+        A = jax.random.normal(key=rng, shape=(a, r)) / a
         B = jnp.zeros(shape=(r, b))
         return A, B
 
@@ -58,6 +58,10 @@ def lora_combine_vars(
     lora_vars: Tuple[jax.Array, jax.Array],
     alpha: float = 1.0,
 ):
+    """Applied on the leaves of the param tree.
+
+    Sums the pretrained param with the LoRA params.
+    """
     A, B = lora_vars
     return pretrained_var + alpha * A @ B
 
@@ -67,14 +71,14 @@ def lora_combine_params(
     lora_params: VariableDict,
     alpha: float = 1.0,
 ) -> VariableDict:
-    """Sums the LoRA fine-tuning to the pretrained parameters.
+    """Sums the LoRA fine-tuning with the pretrained parameters.
 
-    :param pretrained_params: A PyTree containing the original parameters
+    :param pretrained_params: A PyTree containing the original parameters.
     :param lora_params: A PyTree which is a subset of ``pretrained_params`` and
-        contains the trained low-rank perturbations to add
-    :param alpha: scaling of the perturbation in the sum
+        contains the trained low-rank perturbations to add.
+    :param alpha: scaling of the perturbation in the sum.
     :return: A PyTree containing the updated parameters (same shape as
-        ``pretrained_params``)
+        ``pretrained_params``).
     """
     lora_params_flat = flax.traverse_util.flatten_dict(
         lora_params,
