@@ -3,6 +3,9 @@ name: Sphinx build
 
 on: push
 
+# TODO this action does not work, the `git` command is not found even though it is
+# installed in the `pre-build-command`.
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -10,6 +13,8 @@ jobs:
     - uses: actions/checkout@v3
     - name: Build HTML
       uses: ammaraskar/sphinx-action@master
+      with:
+        pre-build-command: apt-get --allow-releaseinfo-change update -y && apt-get install git-all
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
       with:

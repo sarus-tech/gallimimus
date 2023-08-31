@@ -1,18 +1,19 @@
 from __future__ import annotations
 
+from typing import List, Tuple
+
 import jax
 import jax.numpy as jnp
 
 from gallimimus.codec.abstract_codec import (
     Codec,
+    Context,
     Embedding,
     Observation,
-    Context,
     Prediction,
 )
+from gallimimus.shared_codecs import SharedCodecs
 from gallimimus.transformer import Transformer
-from typing import List, Tuple
-
 
 # for a Struct with N columns
 StructObservation = List[Observation]  # of length N
@@ -22,8 +23,12 @@ StructPrediction = List[Prediction]  # of length N
 
 
 class StructCodec(Codec):
-    """A codec for tabular data where the columns are generated each using their own sub-codec, as provided
-    by ``subcodecs_in``.
+    """A codec for tabular data where the columns are generated each using their own
+    sub-codec, as provided by ``subcodecs_in``.
+
+    If ``subcodecs_in = [subcodec_1, ..., subcodec_n]`` and ``subcodec_i`` handles type
+    SubObservation_i, then an observation has type ``Tuple[SubObservation_1, ...,
+    SubObservation_n]``.
 
     :param embed_dim: Size of the embeddings.
     :param subcodecs_in: List of the Codecs used for each column.
@@ -31,19 +36,31 @@ class StructCodec(Codec):
     :param n_blocks: Number of transformer blocks.
     """
 
-    subcodecs_in: List[Codec]
+    subcodecs_in: List[str]
     n_heads: int = 4
     n_blocks: int = 1
 
     def setup(self):
-        self.subcodecs = [subcodec.clone() for subcodec in self.subcodecs_in]
-        self.encoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks)
-        self.decoder = Transformer(num_heads=self.n_heads, num_blocks=self.n_blocks)
+        self.encoder = Transformer(
+            num_heads=self.n_heads,
+            num_blocks=self.n_blocks,
+            embed_dim=self.embed_dim,
+        )
+        self.decoder = Transformer(
+            num_heads=self.n_heads,
+            num_blocks=self.n_blocks,
+            embed_dim=self.embed_dim,
+        )
 
-    def encode(self, x: StructObservation) -> Tuple[Embedding, StructContext]:
+    def encode(
+        self, x: StructObservation, shared_codecs: SharedCodecs
+    ) -> Tuple[Embedding, StructContext]:
         # apply sub-codec encoders to each column independently
         embeddings, subcontexts = zip(
-            *[subcodec_i.encode(x_i) for x_i, subcodec_i in zip(x, self.subcodecs)]
+            *[
+                shared_codecs.encode(subcodec_i, x_i)
+                for x_i, subcodec_i in zip(x, self.subcodecs_in)
+            ]
         )
 
         # apply encoder transformer to the embeddings
@@ -53,7 +70,10 @@ class StructCodec(Codec):
         return encoded_embeddings[-1], (encoded_embeddings, subcontexts)
 
     def decode(
-        self, conditioning_vector: Embedding, context: StructContext
+        self,
+        conditioning_vector: Embedding,
+        context: StructContext,
+        shared_codecs: SharedCodecs,
     ) -> StructPrediction:
         encoded_embeddings, subcontexts = context
 
@@ -65,23 +85,28 @@ class StructCodec(Codec):
 
         # apply subcodec decoders to each column independently
         sub_predictions = [
-            subcodec_i.decode(conditioning_context_i, subcontext_i)
+            shared_codecs.decode(subcodec_i, conditioning_context_i, subcontext_i)
             for conditioning_context_i, subcontext_i, subcodec_i in zip(
                 conditioning_contexts,
                 subcontexts,
-                self.subcodecs,
+                self.subcodecs_in,
             )
         ]
 
         return sub_predictions
 
     def sample(
-        self, conditioning_vector: Embedding
+        self, conditioning_vector: Embedding, shared_codecs: SharedCodecs
     ) -> Tuple[StructObservation, Embedding]:
         samples = []
-        embeddings = jnp.zeros(shape=(len(self.subcodecs), self.embed_dim))  # length N
+        embeddings = jnp.zeros(
+            shape=(len(self.subcodecs_in), self.embed_dim)
+        )  # length N
 
-        for i, subcodec_i in enumerate(self.subcodecs):
+        rng = self.make_rng(name="sample")
+        rngs = jax.random.split(rng, len(self.subcodecs_in))
+
+        for i, subcodec_i in enumerate(self.subcodecs_in):
             # encode what was previously sampled
             encoded_embeddings = self.encoder(embeddings)
 
@@ -94,8 +119,10 @@ class StructCodec(Codec):
             ]
 
             # sample from the next column
-            sample_i, embedding_i = subcodec_i.sample(
-                conditioning_vector=conditioning_vector_i
+            sample_i, embedding_i = shared_codecs.sample(
+                subcodec_i,
+                conditioning_vector=conditioning_vector_i,
+                rng=rngs[i],
             )
 
             samples.append(sample_i)
@@ -104,14 +131,23 @@ class StructCodec(Codec):
         encoded_embeddings = self.encoder(embeddings)
         return samples, encoded_embeddings[-1]
 
-    def loss(self, x: StructObservation, prediction: StructPrediction) -> jnp.ndarray:
-        losses = [
-            subcodec.loss(x=x_i, prediction=pred_i)
-            for subcodec, x_i, pred_i in zip(self.subcodecs, x, prediction)
-        ]
-        return jnp.array(losses).sum()
+    def loss(
+        self,
+        x: StructObservation,
+        prediction: StructPrediction,
+        shared_codecs: SharedCodecs,
+    ) -> jnp.ndarray:
+        losses = {
+            subcodec: shared_codecs.loss(model_name=subcodec, x=x_i, prediction=pred_i)
+            for subcodec, x_i, pred_i in zip(self.subcodecs_in, x, prediction)
+        }
+        return losses
 
-    def example(self) -> StructObservation:
-        # iterate over self.subcodecs_in instead of self.subcodecs because they only exist after `setup` is done
-        sub_examples = [subcodec.example() for subcodec in self.subcodecs_in]
+    def example(self, shared_codecs: SharedCodecs) -> StructObservation:
+        # iterate over self.subcodecs_in instead of self.subcodecs because they only
+        # exist after `setup` is done
+        sub_examples = [
+            shared_codecs.example(subcodec) for subcodec in self.subcodecs_in
+        ]
+
         return list(sub_examples)

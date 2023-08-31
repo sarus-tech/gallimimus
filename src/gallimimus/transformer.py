@@ -1,23 +1,9 @@
-"""Transformer-based language models.
-
-from https://github.com/google/flax/blob/main/examples/nlp_seq/models.py"""
-
-import jax.numpy as jnp
+"""Transformer-based language models."""
 import flax.linen as nn
-
-
-class Encoder1DBlock(nn.Module):
-    """Causal Encoder Block."""
-
-    num_heads: int
-    mlp_dim: int = 0
-
-    @nn.compact
-    def __call__(self, inputs):
-        mask = jnp.tri(N=len(inputs))
-        x = nn.SelfAttention(num_heads=self.num_heads)(inputs_q=inputs, mask=mask)
-        x = x + inputs
-        return x
+import jax.numpy as jnp
+import jax.tree_util
+from transformers import GPT2Config
+from transformers.models.gpt2.modeling_flax_gpt2 import FlaxGPT2BlockCollection
 
 
 class Transformer(nn.Module):
@@ -25,12 +11,28 @@ class Transformer(nn.Module):
 
     num_heads: int
     num_blocks: int
+    embed_dim: int
+
+    def setup(self) -> None:
+        config = GPT2Config(
+            n_head=self.num_heads,
+            n_layer=self.num_blocks,
+            n_embd=self.embed_dim,
+        )
+
+        self.transformer = FlaxGPT2BlockCollection(config=config)
 
     @nn.compact
     def __call__(self, inputs):
-        """Applies Transformer model on the inputs."""
+        """Applies the GPT2 transformer model on the inputs."""
         # assert inputs.ndim == 2  # (len, embed_dim)
-        x = inputs
-        for _ in range(self.num_blocks):
-            x = Encoder1DBlock(num_heads=self.num_heads)(x)
-        return x
+
+        inputs = jax.tree_util.tree_map(
+            lambda arr: jnp.expand_dims(arr, axis=0), inputs
+        )
+        outputs = self.transformer(
+            hidden_states=inputs,
+        )[0]
+
+        outputs = jax.tree_util.tree_map(lambda arr: jnp.squeeze(arr, axis=0), outputs)
+        return outputs

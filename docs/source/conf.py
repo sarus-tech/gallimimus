@@ -4,13 +4,6 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 from __future__ import annotations
 
-import pathlib
-import sys
-
-# module_path = pathlib.Path.cwd().parent.parent / "src"
-# sys.path.insert(0, str(module_path))
-
-
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
@@ -26,7 +19,6 @@ extensions = [
     "sphinx.ext.autodoc",
 ]
 
-# autodoc_member_order = 'bysource'
 
 autodoc_default_options = {
     "member-order": "bysource",
@@ -38,10 +30,12 @@ autodoc_typehints = "description"
 
 autodoc_typehints_description_target = "documented_params"
 autodoc_inherit_docstrings = False
+
 autodoc_type_aliases = {
     "VariableDict": "flax.core.scope.VariableDict",
     "Embedding": "Embedding",
     "Module": "flax.linen.Module",
+    "PRNGKeyArray": "jax.random.PRNGKeyArray",
 }
 
 
