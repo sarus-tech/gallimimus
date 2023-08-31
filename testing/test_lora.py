@@ -1,33 +1,36 @@
-"""pretrained distilgpt2 trained with LoRA
+"""Pretrained distilgpt2 trained with LoRA.
 
-taken from the notebook https://colab.research.google.com/github/huggingface/notebooks/blob/main/examples/causal_language_modeling_flax.ipynb
-listed at https://huggingface.co/docs/transformers/main/en/model_doc/gpt2#resources"""
+taken from the notebook
+https://colab.research.google.com/github/huggingface/notebooks/blob/main/examples/causal_language_modeling_flax.ipynb
+listed at https://huggingface.co/docs/transformers/main/en/model_doc/gpt2#resources
+"""
+import logging
 import os
-import pickle
 import time
 import typing
 from dataclasses import dataclass
 
 import datasets
 import jax
+import jax.numpy as jnp
+import jax.random
 import numpy as np
 import optax
-import jax.numpy as jnp
 import pandas as pd
+from datasets import load_dataset
+from faker.providers.person.en import Provider
 from flax.training import train_state
 from tqdm import tqdm
-import jax.random
-from transformers import FlaxAutoModel, AutoTokenizer
-from datasets import load_dataset
-
-from faker.providers.person.en import Provider
+from transformers import AutoTokenizer, FlaxAutoModel
 
 from lora_flax import LoRA
 
-import logging
-logging.basicConfig(filename='./myapp.log', level=logging.DEBUG,
-                    format='%(asctime)s %(levelname)s %(name)s %(message)s')
-logger=logging.getLogger(__name__)
+logging.basicConfig(
+    filename="./myapp.log",
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 ### import the pre-trained model
 tokenizer = AutoTokenizer.from_pretrained("distilgpt2")
@@ -35,21 +38,22 @@ tokenizer.pad_token = tokenizer.eos_token
 
 model = FlaxAutoModel.from_pretrained("distilgpt2")
 
-apply_fn = lambda params, input, **kwargs: model(
-    **input, params=params["params"], **kwargs
-)
+
+def apply_fn(params, input, **kwargs):
+    return model(**input, params=params["params"], **kwargs)
 
 
+# wrap the language model, so that it uses the usual Flax interface:
 @dataclass
 class WrapperModel:
     model: typing.Any
 
     def apply(self, params, input, rngs={}, method=None, **kwargs):
-        return self.model(
-    **input, params=params["params"], **kwargs
-)
+        return self.model(**input, params=params["params"], **kwargs)
+
 
 wrapped_model = WrapperModel(model)
+
 
 ### definition of the different datasets:
 def make_names(size_train, size_eval):
@@ -59,35 +63,38 @@ def make_names(size_train, size_eval):
     first_names_r = np.random.choice(first_names, size=size_train + size_eval)
     last_names_r = np.random.choice(last_names, size=size_train + size_eval)
 
-    names = [ f"{first_name} {last_name}" for first_name, last_name in zip(first_names_r, last_names_r)]
+    names = [
+        f"{first_name} {last_name}"
+        for first_name, last_name in zip(first_names_r, last_names_r)
+    ]
 
     raw_ds = {"train": names[:size_train], "validation": names[size_train:]}
-    tokenized_ds = {k: tokenizer(v, padding='longest') for k,v in raw_ds.items()}
+    tokenized_ds = {k: tokenizer(v, padding="longest") for k, v in raw_ds.items()}
 
     for k, v in tokenized_ds.items():
         v["labels"] = v["input_ids"].copy()
 
-    tokenized_ds = {k: datasets.Dataset.from_dict(v) for k,v in tokenized_ds.items()}
+    tokenized_ds = {k: datasets.Dataset.from_dict(v) for k, v in tokenized_ds.items()}
     return tokenized_ds
+
 
 def make_huggingface_ds(name, max_seq_length, text_name="text"):
     raw_dataset = load_dataset(*name)
-    raw_dataset["train"] = load_dataset(
-        *name, split="train[5%:]"
-    )
-    raw_dataset["validation"] = load_dataset(
-        *name, split="train[:5%]"
-    )
+    raw_dataset["train"] = load_dataset(*name, split="train[5%:]")
+    raw_dataset["validation"] = load_dataset(*name, split="train[:5%]")
 
     # TODO these cells should be commented out to run on full dataset
     raw_dataset["train"] = raw_dataset["train"].select(range(200))
     raw_dataset["validation"] = raw_dataset["validation"].select(range(20))
 
-
     def tokenize_function(examples):
-        out = tokenizer(examples[text_name], padding="max_length", max_length=max_seq_length, truncation=True)
+        out = tokenizer(
+            examples[text_name],
+            padding="max_length",
+            max_length=max_seq_length,
+            truncation=True,
+        )
         return out
-
 
     tokenized_datasets1 = raw_dataset.map(
         tokenize_function,
@@ -96,19 +103,18 @@ def make_huggingface_ds(name, max_seq_length, text_name="text"):
         remove_columns=raw_dataset["train"].column_names,
     )
 
-
     def group_texts(examples):
         # concatenated_examples = {k: sum(examples[k], []) for k in examples.keys()}
         # total_length = len(concatenated_examples[list(examples.keys())[0]])
         # total_length = (total_length // max_seq_length) * max_seq_length
         # result = {
-        #     k: [t[i : i + max_seq_length] for i in range(0, total_length, max_seq_length)]
+        #     k: [t[i : i + max_seq_length] for i in
+        #     range(0, total_length, max_seq_length)]
         #     for k, t in concatenated_examples.items()
         # }
         result = {k: examples[k] for k in examples.keys()}
         result["labels"] = result["input_ids"].copy()
         return result
-
 
     tokenized_datasets = tokenized_datasets1.map(group_texts, batched=True, num_proc=8)
 
@@ -125,19 +131,17 @@ def make_oscar():
         max_seq_length=max_seq_length,
     )
 
+
 def make_reviews():
     name = ("flxclxc/encoded_drug_reviews",)
-    dataset = make_huggingface_ds(
-        name=name,
-        max_seq_length=128,
-        text_name="review"
-    )
+    dataset = make_huggingface_ds(name=name, max_seq_length=128, text_name="review")
     return dataset
 
 
 def count_params(params):
     param_count = sum(x.size for x in jax.tree_leaves(params))
     return param_count
+
 
 @dataclass
 class TrainingHyperparams:
@@ -148,17 +152,24 @@ class TrainingHyperparams:
     learning_rate: float = 3e-4
 
     optimizer_seed: int = 1
-    noise_multiplier: float = 1.
+    noise_multiplier: float = 1.0
     l2_norm_clip: float = 1e10
+
 
 ### main training function:
 
-def do_lora_training(filter_fn, lora_rank, save_folder, tokenized_datasets, hyperparams: TrainingHyperparams):
+
+def do_lora_training(
+    filter_fn,
+    lora_rank,
+    save_folder,
+    tokenized_datasets,
+    hyperparams: TrainingHyperparams,
+):
     os.makedirs(save_folder, exist_ok=True)
     print(f"--- saving to {save_folder} ---")
     try:
         t0 = time.perf_counter()
-
 
         lora_bert = LoRA(
             target_module=wrapped_model,
@@ -169,10 +180,11 @@ def do_lora_training(filter_fn, lora_rank, save_folder, tokenized_datasets, hype
 
         ### train the LoRA model with the dataset
 
-
-        num_train_steps = len(tokenized_datasets["train"]) // hyperparams.batch_size * hyperparams.num_epochs
-
-
+        num_train_steps = (
+            len(tokenized_datasets["train"])
+            // hyperparams.batch_size
+            * hyperparams.num_epochs
+        )
 
         def data_loader(rng, dataset, batch_size, shuffle=False):
             steps_per_epoch = len(dataset) // batch_size
@@ -182,7 +194,9 @@ def do_lora_training(filter_fn, lora_rank, save_folder, tokenized_datasets, hype
             else:
                 batch_idx = jnp.arange(len(dataset))
 
-            batch_idx = batch_idx[: steps_per_epoch * batch_size]  # Skip incomplete batch.
+            batch_idx = batch_idx[
+                : steps_per_epoch * batch_size
+            ]  # Skip incomplete batch.
             batch_idx = batch_idx.reshape((steps_per_epoch, batch_size))
 
             for idx in batch_idx:
@@ -191,7 +205,6 @@ def do_lora_training(filter_fn, lora_rank, save_folder, tokenized_datasets, hype
 
                 yield batch
 
-
         init_rng = jax.random.PRNGKey(0)
 
         init_loader = data_loader(
@@ -199,11 +212,11 @@ def do_lora_training(filter_fn, lora_rank, save_folder, tokenized_datasets, hype
         )
 
         init_batch = next(init_loader)
-        labels = init_batch.pop("labels")
+        init_batch.pop("labels")
         lora_param = lora_bert.init(jax.random.PRNGKey(0), init_batch)
 
         print(
-f"""training 
+            f"""training 
 - {count_params(lora_param)} compared to 
 - {count_params(model.params)} original params"""
         )
@@ -222,6 +235,7 @@ f"""training
         grad_fn = jax.value_and_grad(loss_fn)
 
         if hyperparams.mode == "dpsgd":
+
             def grad_fn_dpsgd(params, batch, dropout_rng):
                 vmapped_grad_fn = jax.vmap(grad_fn, in_axes=(None, 0, None))
                 batch = jax.tree_util.tree_map(lambda arr: arr[None, :], batch)
@@ -248,7 +262,9 @@ f"""training
 
             elif hyperparams.mode == "adamw":
                 linear_decay_lr_schedule_fn = optax.linear_schedule(
-                    init_value=hyperparams.learning_rate, end_value=0, transition_steps=num_train_steps
+                    init_value=hyperparams.learning_rate,
+                    end_value=0,
+                    transition_steps=num_train_steps,
                 )
                 tx = optax.adamw(
                     learning_rate=linear_decay_lr_schedule_fn,
@@ -268,15 +284,12 @@ f"""training
         def train_step(state, batch, dropout_rng):
             dropout_rng, new_dropout_rng = jax.random.split(dropout_rng)
 
-
-
             loss, grad = state.apply_fn(state.params, batch, dropout_rng)
             new_state = state.apply_gradients(grads=grad)
 
             metrics = {"loss": loss}
 
             return new_state, metrics, new_dropout_rng
-
 
         def eval_step(params, batch):
             labels = batch.pop("labels")
@@ -291,19 +304,26 @@ f"""training
             metrics = {"loss": loss, "perplexity": jnp.exp(loss)}
             return metrics
 
-
         rng = jax.random.PRNGKey(hyperparams.training_seed)
         dropout_rngs = rng
 
         eval_file = os.path.join(save_folder, "eval_metric.csv")
         train_file = os.path.join(save_folder, "train_metric.csv")
 
-        for epoch in tqdm(range(1, hyperparams.num_epochs + 1), desc=f"Epoch ...", position=0, leave=True):
+        for epoch in tqdm(
+            range(1, hyperparams.num_epochs + 1),
+            desc="Epoch ...",
+            position=0,
+            leave=True,
+        ):
             rng, input_rng = jax.random.split(rng)
 
             # -- Train --
             train_loader = data_loader(
-                input_rng, tokenized_datasets["train"], hyperparams.batch_size, shuffle=True
+                input_rng,
+                tokenized_datasets["train"],
+                hyperparams.batch_size,
+                shuffle=True,
             )
 
             with tqdm(
@@ -320,14 +340,26 @@ f"""training
                     progress_bar_train.update(1)
 
                 progress_bar_train.write(
-                    f"Train... ({epoch}/{hyperparams.num_epochs} | Loss: {round(train_metric['loss'].mean(), 3)})"
+                    f"Train... ({epoch}/{hyperparams.num_epochs} | Loss:"
+                    f" {round(train_metric['loss'].mean(), 3)})"
                 )
                 t1 = time.perf_counter() - t0
-                train_metrics_save = {"time": t1, "loss": train_metric["loss"], "epoch": epoch}
+                train_metrics_save = {
+                    "time": t1,
+                    "loss": train_metric["loss"],
+                    "epoch": epoch,
+                }
                 train_metrics_save = pd.DataFrame.from_records([train_metrics_save])
-                train_metrics_save.to_csv(train_file, index=False, mode='a', header=not os.path.exists(train_file))
+                train_metrics_save.to_csv(
+                    train_file,
+                    index=False,
+                    mode="a",
+                    header=not os.path.exists(train_file),
+                )
             # -- Eval --
-            eval_loader = data_loader(input_rng, tokenized_datasets["validation"], hyperparams.batch_size)
+            eval_loader = data_loader(
+                input_rng, tokenized_datasets["validation"], hyperparams.batch_size
+            )
             eval_metrics = []
 
             with tqdm(
@@ -346,28 +378,36 @@ f"""training
                     lambda *leaves: jnp.mean(jnp.array(leaves)), *eval_metrics
                 )
                 progress_bar_eval.write(
-                    f"Eval... ({epoch}/{hyperparams.num_epochs} | Loss: {eval_metrics['loss']} | Perplexity: {eval_metrics['perplexity']})"
+                    f"Eval... ({epoch}/{hyperparams.num_epochs} | Loss:"
+                    f" {eval_metrics['loss']} | Perplexity:"
+                    f" {eval_metrics['perplexity']})"
                 )
 
                 t2 = time.perf_counter() - t0
-                eval_metrics_save = {"time": t2, "loss": eval_metrics["loss"], "perplexity": eval_metrics["perplexity"]}
+                eval_metrics_save = {
+                    "time": t2,
+                    "loss": eval_metrics["loss"],
+                    "perplexity": eval_metrics["perplexity"],
+                }
                 eval_metrics_save = pd.DataFrame.from_records([eval_metrics_save])
-                eval_metrics_save.to_csv(eval_file, index=False, mode='a', header=not os.path.exists(eval_file))
-
-
+                eval_metrics_save.to_csv(
+                    eval_file,
+                    index=False,
+                    mode="a",
+                    header=not os.path.exists(eval_file),
+                )
 
     except Exception as err:
         raise
         logger.error(err)
 
 
-
 if __name__ == "__main__":
-
-
     tokenized_datasets = make_names(size_train=1000, size_eval=100)
 
-    filter_fn1 = lambda param_name, params: "kernel" in param_name
+    def filter_fn1(param_name, params):
+        return "kernel" in param_name
+
     # hyperparams = TrainingHyperparams(
     #     mode="sgd",
     #     batch_size=16,
@@ -385,28 +425,26 @@ if __name__ == "__main__":
     #     hyperparams=hyperparams,
     # )
 
-    for l2_norm_clip in [1., 10., 100.]:
-        for noise_multiplier in [0., 0.5, 1., 2.]:
+    for l2_norm_clip in [1.0, 10.0, 100.0]:
+        for noise_multiplier in [0.0, 0.5, 1.0, 2.0]:
             hyperparams = TrainingHyperparams(
                 mode="dpsgd",
                 batch_size=16,
                 num_epochs=10,
                 training_seed=0,
                 learning_rate=3e-4,
-
                 optimizer_seed=1,
                 noise_multiplier=noise_multiplier,
-                l2_norm_clip=l2_norm_clip
+                l2_norm_clip=l2_norm_clip,
             )
 
             do_lora_training(
                 filter_fn=filter_fn1,
-                lora_rank = 4,
+                lora_rank=4,
                 save_folder=f"./exp_name/exp_dp_{noise_multiplier}_{l2_norm_clip}/",
-                tokenized_datasets = tokenized_datasets,
-                hyperparams = hyperparams,
+                tokenized_datasets=tokenized_datasets,
+                hyperparams=hyperparams,
             )
-
 
     ### exp 2
     tokenized_datasets = make_reviews()
@@ -422,25 +460,23 @@ if __name__ == "__main__":
 
     do_lora_training(
         filter_fn=filter_fn1,
-        lora_rank = 4,
+        lora_rank=4,
         save_folder="./exp_review/exp_sgd/",
         tokenized_datasets=tokenized_datasets,
-        hyperparams = hyperparams,
+        hyperparams=hyperparams,
     )
 
-
-    for l2_norm_clip in [1., 10., 100.]:
-        for noise_multiplier in [0., 0.5, 1., 2.]:
+    for l2_norm_clip in [1.0, 10.0, 100.0]:
+        for noise_multiplier in [0.0, 0.5, 1.0, 2.0]:
             hyperparams = TrainingHyperparams(
                 mode="dpsgd",
                 batch_size=16,
                 num_epochs=10,
                 training_seed=0,
                 learning_rate=3e-4,
-
                 optimizer_seed=1,
                 noise_multiplier=noise_multiplier,
-                l2_norm_clip=l2_norm_clip
+                l2_norm_clip=l2_norm_clip,
             )
 
             do_lora_training(
@@ -462,5 +498,5 @@ if __name__ == "__main__":
         filter_fn=filter_fn1,
         lora_rank=r,
         save_folder="./exp3",
-        hyperparams = hyperparams,
+        hyperparams=hyperparams,
     )

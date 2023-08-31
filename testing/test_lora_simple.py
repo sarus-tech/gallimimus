@@ -1,13 +1,11 @@
-"""
-LoRA example with linear regression
-"""
+"""LoRA example with linear regression."""
 import time
 
+import flax
+import flax.linen as nn
 import jax
 import jax.numpy as jnp
 import jax.random as random
-import flax.linen as nn
-import flax
 
 from lora_flax import LoRA
 
@@ -93,5 +91,6 @@ for i in range(201):
     if i % 10 == 0:
         a, b = params["params"]["lora"]["kernel"]
         print(
-            f"Loss step {i:<5}: {loss_val:.4f}, norm = {jnp.linalg.norm(W - a@b):.4f}, t={t1-t0}"
+            f"Loss step {i:<5}: {loss_val:.4f}, norm = {jnp.linalg.norm(W - a@b):.4f},"
+            f" t={t1-t0}"
         )

@@ -9,3 +9,30 @@ dependencies = [
     "jax",
     "flax",
 ]
+
+[tool.black]
+line-length = 88
+experimental-string-processing = true
+target-version = ['py36','py37','py38',]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+force-exclude = '.*_pb2\.py*'
+
+[tool.isort]
+profile = "black"
+
+[tool.docformatter]
+black = true
