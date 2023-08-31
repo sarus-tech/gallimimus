@@ -5,11 +5,11 @@ from typing import Tuple
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
-from lora_flax import FilterFunction
 from lora_flax.lora import init_lora_params, lora_combine_params
 
 from gallimimus.codec.abstract_codec import Codec, Embedding
 from gallimimus.shared_codecs import SharedCodecs
+from lora_flax import FilterFunction
 
 CategoricalObservation = jax.Array  # of shape () and dtype int
 CategoricalContext = None

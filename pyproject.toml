@@ -12,6 +12,7 @@ dependencies = [
     "transformers",
     "tensorboard",
     "tensorflow",
+    "lora_flax@git+https://github.com/sarus-tech/gallimimus.git@lora-flax"
 ]
 
 

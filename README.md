@@ -8,6 +8,4 @@ where a pretrained language model is used.
 
 ### Installation
 
-`lora-flax` needs to be installed for this module to work.
-
-Then `pip install .` or `pip install -r requirements-dev.txt` install gallimimus.
+Do `pip install .` or `pip install -r requirements-dev.txt` to install gallimimus.
