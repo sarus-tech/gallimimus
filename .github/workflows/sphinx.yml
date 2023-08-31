@@ -11,7 +11,7 @@ jobs:
     - name: Build HTML
       uses: ammaraskar/sphinx-action@master
       with:
-        pre-build-command: apt-get install -y git
+        pre-build-command: apt-get update -y && apt-get install git
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
       with:
